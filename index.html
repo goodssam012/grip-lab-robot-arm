@@ -1,0 +1,1208 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GRIP·LAB — 모션 학습 로봇팔 시뮬레이터</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="logo">◆</span> GRIP·LAB <small>모션 학습 로봇팔 시뮬레이터</small></div>
+  <div class="chips">
+    <span class="chip" id="chipInput">입력: 키보드</span>
+    <span class="chip" id="chipTrack">카메라 꺼짐</span>
+    <span class="chip" id="chipFps">-- fps</span>
+  </div>
+  <div class="hbtns">
+    <button id="btnCam" class="primary">📷 카메라 시작</button>
+    <button id="btnTilt" class="hidden">📱 기울기 센서</button>
+    <button id="btnHelp">도움말</button>
+  </div>
+</header>
+
+<main>
+  <section id="view">
+    <div id="taskCard" class="ov tl glass"></div>
+    <div id="autoBadge" class="ov tc glass hidden"></div>
+    <div class="ov tr viewbtns">
+      <button data-view="front">정면</button><button data-view="side">측면</button>
+      <button data-view="top">위</button><button data-view="back">뒤</button>
+    </div>
+    <div id="alignInfo" class="ov bl glass"></div>
+    <div id="gauge" class="ov bc glass">
+      <div class="gtop"><span>그립 힘</span><b id="gN">0.0 N</b><span id="gState" class="state">대기</span></div>
+      <div class="gbar"><div id="gGuide" class="band hidden"></div><div id="gFill"></div><div id="gReq" class="mk req hidden"></div><div id="gBrk" class="mk brk hidden"></div></div>
+      <div class="gscale" id="gScale"></div>
+      <div class="fingers">
+        <div><label>엄지</label><i><b id="fT"></b></i></div>
+        <div><label>검지</label><i><b id="fI"></b></i></div>
+        <div><label>중지</label><i><b id="fM"></b></i></div>
+      </div>
+      <div class="gmeta">
+        <span id="gAcc">가속 0.0 m/s²</span><span id="gCurl">손가락 굽힘 0%</span>
+        <span class="legend" id="gLegend"></span>
+      </div>
+    </div>
+    <div id="touchPad" class="hidden">
+      <div class="grp dpad"><span></span><button data-key="arrowup">▲</button><span></span><button data-key="arrowleft">◀</button><button data-key="arrowdown">▼</button><button data-key="arrowright">▶</button></div>
+      <div class="grp act"><button data-key="w">뻗기</button><button data-key="x">쥐기</button><button data-key="s">당기기</button><button data-key="z">펴기</button></div>
+    </div>
+    <div id="toast"></div>
+  </section>
+
+  <aside id="panel">
+    <div class="card">
+      <h4>카메라 · 손가락 관절 추적 <small id="trkMode">꺼짐</small></h4>
+      <div class="camwrap">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div id="camPh">카메라가 꺼져 있습니다<small>손바닥을 카메라로 향하고 쥐었다 펴면<br>로봇 손이 따라 합니다</small></div>
+      </div>
+      <div class="curls">
+        <div class="row"><span>엄지</span><i><b id="cT"></b></i><span id="cTv">0%</span></div>
+        <div class="row"><span>검지</span><i><b id="cI"></b></i><span id="cIv">0%</span></div>
+        <div class="row"><span>중지</span><i><b id="cM"></b></i><span id="cMv">0%</span></div>
+      </div>
+      <div class="btnrow">
+        <button id="btnCalOpen">✋ 손 펴기 보정</button>
+        <button id="btnCalFist">✊ 주먹 보정</button>
+      </div>
+      <div class="readouts">
+        <div class="ro"><span>몸통 회전</span><b id="roYaw">–</b></div>
+        <div class="ro"><span>어깨 관절</span><b id="roSh">–</b></div>
+        <div class="ro"><span>팔꿈치 관절</span><b id="roEl">–</b></div>
+      </div>
+    </div>
+
+    <nav class="tabs">
+      <button data-tab="task" class="on">과제</button>
+      <button data-tab="demo">시연 데이터</button>
+      <button data-tab="learn">학습</button>
+      <button data-tab="auto">자동 수행</button>
+    </nav>
+
+    <!-- 과제 -->
+    <div class="tab on" id="tab-task">
+      <div class="card">
+        <h4>과제 물체 <small>초록 점 = 학습 완료</small></h4>
+        <div class="objgrid" id="objGrid"></div>
+        <div class="btnrow">
+          <button id="btnNew" class="primary">새 과제</button>
+          <button id="btnRetry">같은 과제 다시</button>
+        </div>
+      </div>
+      <div class="card">
+        <h4>수동 그립 <small id="gripVal">0%</small></h4>
+        <input type="range" id="gripSlider" min="0" max="1" step="0.002" value="0">
+        <div class="checks" style="margin-top:8px">
+          <label><input type="checkbox" id="setHint"> 힘 범위 힌트 표시</label>
+          <label><input type="checkbox" id="setGuide"> 학습 최적값 가이드</label>
+          <label><input type="checkbox" id="setSave"> 시연 자동 저장</label>
+          <label><input type="checkbox" id="setNext"> 자동 다음 과제</label>
+        </div>
+      </div>
+      <div class="card">
+        <h4>최근 결과</h4>
+        <div class="list" id="logList"><div class="c-muted">아직 결과가 없습니다.</div></div>
+      </div>
+      <div class="card">
+        <h4>조작 방법</h4>
+        <div class="keys">
+          <span><kbd>←</kbd><kbd>→</kbd></span><span>몸통 회전 (팔이 원을 그리며 돕니다)</span>
+          <span><kbd>↑</kbd><kbd>↓</kbd></span><span>팔 올리기 / 내리기</span>
+          <span><kbd>W</kbd> / <kbd>S</kbd></span><span>팔 뻗기 / 당기기</span>
+          <span><kbd>X</kbd> / <kbd>Z</kbd></span><span>손가락 오므리기 / 펴기 (카메라 없을 때)</span>
+          <span><kbd>Shift</kbd></span><span>누르고 있으면 정밀(느리게)</span>
+          <span><kbd>N</kbd> / <kbd>Space</kbd></span><span>새 과제 / 자동 수행</span>
+          <span>📱 모바일</span><span>기울기 센서: 좌우로 기울이면 회전, 앞뒤로 기울이면 내리기/올리기. 뻗기·쥐기는 화면 버튼</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 시연 데이터 -->
+    <div class="tab" id="tab-demo">
+      <div class="card">
+        <h4>시연 데이터 요약 <small id="demoTotal"></small></h4>
+        <table id="demoStats"></table>
+        <div class="btnrow">
+          <button id="btnSynth">가상 시연 ×10 (선택 물체)</button>
+          <button id="btnSynthAll">전체 물체 ×10</button>
+        </div>
+        <small>카메라·키보드로 직접 옮긴 시도는 성공·실패 모두 자동으로 시연에 저장됩니다. 가상 시연은 카메라 없이 학습을 시험해 보기 위한 "사람 흉내" 데이터입니다.</small>
+      </div>
+      <div class="card">
+        <h4>최근 시연</h4>
+        <div class="list" id="demoList"></div>
+        <div class="btnrow">
+          <button id="btnExport">내보내기(JSON)</button>
+          <button id="btnImport">가져오기</button>
+          <button id="btnClear">전체 초기화</button>
+        </div>
+        <input type="file" id="fileImport" accept="application/json" class="hidden">
+      </div>
+    </div>
+
+    <!-- 학습 -->
+    <div class="tab" id="tab-learn">
+      <div class="card">
+        <h4>학습 실행</h4>
+        <div class="form">
+          <label>학습 물체</label><select id="learnObj"></select>
+          <label>세대 수</label><input type="number" id="learnGens" value="40" min="5" max="200">
+          <label>세대당 시도 수</label><input type="number" id="learnPop" value="48" min="12" max="200">
+        </div>
+        <div class="btnrow">
+          <button id="btnLearn" class="primary">▶ 학습 시작</button>
+          <button id="btnLearnAll">전체 물체 학습</button>
+        </div>
+        <div class="prog"><b id="learnProg"></b></div>
+        <small id="learnStatus">시연 데이터로 초깃값을 잡고, 시뮬레이션 자가 연습으로 최적값을 찾습니다.</small>
+      </div>
+      <div class="card">
+        <h4>학습 곡선 <small>점수 · 성공률</small></h4>
+        <canvas class="chart" id="cvCurve"></canvas>
+      </div>
+      <div class="card">
+        <h4>그립 힘 지도 <small>시연 결과와 학습 최적값</small></h4>
+        <canvas class="chart" id="cvWin" style="height:170px"></canvas>
+      </div>
+      <div class="card">
+        <h4>학습된 최적값</h4>
+        <table class="kv" id="polTable"></table>
+      </div>
+      <div class="card">
+        <h4>작동 원리</h4>
+        <ol class="steps">
+          <li><b>모방</b> — 사람 시연에서 쥐는 힘·손가락 굽힘·운반 속도·놓는 높이를 뽑아 탐색의 출발점으로 삼습니다.</li>
+          <li><b>경계 추정</b> — 미끄러진 시연은 힘의 하한, 깨뜨린 시연은 상한의 증거로 씁니다.</li>
+          <li><b>자가 연습</b> — 교차 엔트로피 방법(CEM)으로 수천 번 가상 시도를 반복해, 떨어뜨리지도 깨지도 않으면서 가장 빠르고 부드러운 값을 찾습니다.</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- 자동 수행 -->
+    <div class="tab" id="tab-auto">
+      <div class="card">
+        <h4>로봇 자동 수행</h4>
+        <div class="form">
+          <label>사용할 정책</label>
+          <select id="autoPolicy"><option value="learned">학습된 정책</option><option value="default">학습 전 기본값</option></select>
+          <label>시뮬레이션 속도</label><input type="range" id="simSpeed" min="0.25" max="3" step="0.25" value="1">
+        </div>
+        <div class="btnrow">
+          <button id="btnAuto" class="primary">▶ 현재 과제 자동 수행</button>
+          <button id="btnAutoLoop">연속 5회</button>
+          <button id="btnAutoStop">정지</button>
+        </div>
+        <small id="autoStatus">학습 탭에서 물체를 학습시킨 뒤 실행해 보세요. 기본값은 모든 물체를 같은 힘(12 N)으로 쥡니다.</small>
+      </div>
+      <div class="card">
+        <h4>로봇 수행 기록 <small id="robotRate"></small></h4>
+        <div class="list" id="robotList"><div class="c-muted">아직 기록이 없습니다.</div></div>
+      </div>
+      <div class="card">
+        <h4>성능 비교 <small>물체당 가상 300회</small></h4>
+        <table id="cmpTable"></table>
+        <div class="btnrow"><button id="btnCompare">학습 전 / 후 비교 실행</button></div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<div id="helpModal" class="modal hidden">
+  <div class="box">
+    <h2>GRIP·LAB 사용법</h2>
+    <p>카메라로 찍은 <b>손가락 관절</b>의 쥐기·펴기로 가상 로봇 손을 움직이고, 그 시연을 학습시켜 로봇이 스스로 물체를 깨지 않고 옮기게 만드는 시뮬레이터입니다. 로봇 손은 <b>수평 방향</b>으로 탁자 위 물체를 옆에서 잡습니다.</p>
+    <h3>1. 조작</h3>
+    <ul>
+      <li><b>손(카메라)</b>: 「카메라 시작」을 누르고 <b>손바닥을 카메라로 향하게</b> 드세요. 손을 움켜쥐면 로봇 손가락이 오므라들고, 펴면 벌어집니다. 엄지·검지·중지가 로봇 손가락 세 개에 각각 전달됩니다. 처음에 「✋ 손 펴기 보정」과 「✊ 주먹 보정」을 한 번씩 해 주세요.</li>
+      <li><b>팔(PC)</b>: 방향키 ←→ 로 몸통을 회전시키고, ↑↓ 로 팔을 올리고 내립니다. W/S 로 팔을 뻗고 당깁니다.</li>
+      <li><b>팔(스마트폰·태블릿)</b>: 「기울기 센서」를 켜고 기기를 좌우로 기울이면 회전, 앞뒤로 기울이면 내리기/올리기입니다. 켜는 순간의 자세가 기준이 됩니다. 뻗기·당기기는 화면 버튼을 씁니다.</li>
+      <li><b>순서</b>: 손을 편 채 물체 쪽으로 회전 → 높이를 맞춤 → 팔을 뻗어 물체를 손가락 사이에 넣음 → 쥐기 → 올리기 → 초록 영역으로 회전 → 내리기 → 펴기.</li>
+    </ul>
+    <h3>2. 힘은 어떻게 정해지나</h3>
+    <p>카메라는 힘을 직접 볼 수 없습니다. 그래서 로봇 손가락이 물체 표면에 닿은 뒤 <b>사람 손가락이 더 굽혀진 만큼</b>을 쥐는 힘으로 바꿉니다(스프링처럼). 조금 더 오므리면 약하게, 많이 오므리면 세게 쥡니다.</p>
+    <ul>
+      <li>힘이 <b>부족</b>하면 마찰이 무게와 가속을 못 이겨 <b>미끄러집니다</b>. 빨리 움직일수록 더 큰 힘이 필요합니다.</li>
+      <li>힘이 <b>지나치면</b> 물체가 <b>깨집니다</b>. 높은 곳에서 놓아도 깨집니다.</li>
+    </ul>
+    <h3>3. 학습 → 자동 수행</h3>
+    <ol>
+      <li>여러 물체를 여러 번 옮겨 시연을 쌓습니다(실패도 중요한 데이터입니다). 카메라가 없으면 「시연 데이터」 탭의 가상 시연을 쓰세요.</li>
+      <li>「학습」 탭에서 학습을 실행하면 물체마다 최적의 쥐는 힘, 운반 시간, 장애물 여유, 놓는 높이를 찾습니다.</li>
+      <li>「자동 수행」 탭에서 로봇이 학습한 값으로 과제를 수행합니다. 「학습 전 기본값」과 비교해 보세요.</li>
+    </ol>
+    <div class="btnrow"><button id="btnHelpClose" class="primary">닫기</button></div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ============================================================ 유틸 */
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const rand = (a, b) => a + Math.random() * (b - a);
+const G = 9.81;
+function randn() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+function median(a) { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
+const meanOf = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
+function stdOf(a) { if (a.length < 2) return 0; const m = meanOf(a); return Math.sqrt(a.reduce((s, x) => s + (x - m) ** 2, 0) / (a.length - 1)); }
+function minJerk(s) { s = clamp(s, 0, 1); return s * s * s * (10 + s * (-15 + 6 * s)); }
+const r2 = v => Math.round(v * 100) / 100, r3 = v => Math.round(v * 1000) / 1000;
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 저장 불가 환경은 무시 */ } }
+};
+class OneEuro {
+  constructor(minCutoff = 1, beta = 0.3, dCutoff = 1) { this.mc = minCutoff; this.beta = beta; this.dc = dCutoff; this.x = null; this.dx = 0; }
+  a(c, dt) { const tau = 1 / (2 * Math.PI * c); return 1 / (1 + tau / dt); }
+  f(x, dt) {
+    if (this.x === null) { this.x = x; return x; }
+    const dx = (x - this.x) / dt; this.dx = lerp(this.dx, dx, this.a(this.dc, dt));
+    this.x = lerp(this.x, x, this.a(this.mc + this.beta * Math.abs(this.dx), dt)); return this.x;
+  }
+  reset() { this.x = null; this.dx = 0; }
+}
+
+/* ============================================================ 물체 · 그리퍼 모델 */
+// r: 쥐는 반지름(m), h: 높이(m), mass(kg), mu: 마찰계수, breakF: 파손 힘(N), dropV: 파손 충돌 속도(m/s)
+const OBJ = {
+  egg:   { name: '달걀',       ic: '🥚', shape: 'egg',    r: 0.028, h: 0.075, mass: 0.06,  mu: 0.35, breakF: 5,   dropV: 0.9, color: 0xf2e2c4 },
+  tofu:  { name: '두부',       ic: '⬜', shape: 'box',    r: 0.035, h: 0.06,  mass: 0.15,  mu: 0.30, breakF: 4.2, dropV: 0.7, color: 0xf7f4ea },
+  bulb:  { name: '전구',       ic: '💡', shape: 'bulb',   r: 0.03,  h: 0.1,   mass: 0.04,  mu: 0.25, breakF: 3.5, dropV: 1.0, color: 0xfff6d8 },
+  paper: { name: '종이컵(물)', ic: '🥤', shape: 'cup',    r: 0.036, h: 0.09,  mass: 0.18,  mu: 0.50, breakF: 5.5, dropV: 0.8, color: 0xf4f6fa },
+  glass: { name: '유리컵',     ic: '🥛', shape: 'glass',  r: 0.035, h: 0.11,  mass: 0.25,  mu: 0.40, breakF: 20,  dropV: 1.2, color: 0x9fd8ff },
+  apple: { name: '사과',       ic: '🍎', shape: 'sphere', r: 0.04,  h: 0.08,  mass: 0.2,   mu: 0.45, breakF: 35,  dropV: 2.2, color: 0xd9342b },
+  ball:  { name: '테니스공',   ic: '🎾', shape: 'sphere', r: 0.033, h: 0.066, mass: 0.058, mu: 0.70, breakF: 200, dropV: 99,  color: 0xcfe23a },
+  iron:  { name: '쇠 블록',    ic: '🧱', shape: 'box',    r: 0.03,  h: 0.06,  mass: 1.0,   mu: 0.30, breakF: 400, dropV: 99,  color: 0x8b95a3 },
+};
+const OBJ_KEYS = Object.keys(OBJ);
+const fragility = o => o.breakF < 6 ? '매우 약함' : o.breakF < 25 ? '약함' : o.breakF < 100 ? '보통' : '단단함';
+
+const TABLE = { x0: -0.8, x1: 0.8, z0: -0.35, z1: 0.9, floor: -0.75 };
+const ARM = { SH_Y: 0.32, L1: 0.40, L2: 0.38, LT: 0.19 };
+// 손가락: 사람 굽힘(0~1) × cmdScale = 로봇 명령. 접촉 이후 초과분이 힘이 된다.
+const GR = { base: 0.03, L1: 0.05, L2: 0.045, palmZ: 0.10, pad: 0.008, eMax: 0.8, cmdScale: 1.5 };
+const FMAX_T = 45, FMAX_F = 22.5, FMAX = 45;
+function fingerAngles(c) { c = clamp(c, 0, 1); return { a: lerp(0.38, -0.22, c), b: lerp(0, 1.0, c) }; }
+function tipRadial(c) { const { a, b } = fingerAngles(c); return GR.base + GR.L1 * Math.sin(a) + GR.L2 * Math.sin(a - b); }
+function contactCurl(r) { const t = r + GR.pad; let lo = 0, hi = 1; for (let k = 0; k < 28; k++) { const m = (lo + hi) / 2; if (tipRadial(m) > t) lo = m; else hi = m; } return (lo + hi) / 2; }
+function fingerForce(cmd, cC, fmax) { const e = clamp((cmd - cC) / GR.eMax, 0, 1); return fmax * e * e; }
+function cmdForForce(F, cC) { return cC + GR.eMax * Math.sqrt(clamp(F / FMAX, 0, 1)); }
+
+/* ============================================================ 빠른 가상 시도(학습용 롤아웃) */
+const DEFAULT_POLICY = { F: 12, T: 1.0, clr: 0.02, hRel: 0.06, pre: 0.08, share: 0.5 };
+const timings = p => ({ Tl: 0.35 * p.T + 0.25, Tt: p.T, Td: 0.3 * p.T + 0.25 });
+function randomGeom() {
+  const r = rand(0.44, 0.64);
+  return { r, dr: rand(0.44, 0.64) - r, dth: rand(0.96, 1.92), barrierH: Math.random() < 0.6 ? rand(0.03, 0.11) : 0, platH: [0, 0.05, 0.1][Math.floor(Math.random() * 3)] };
+}
+// 회전 운반(최소 저크 궤적) 중 최대 수평 가속 — 접선 성분과 원심 성분을 함께 본다
+const MJ = Array.from({ length: 11 }, (_, k) => { const t = (k + 0.5) / 11; return { s: minJerk(t), v: 30 * t * t * (1 - t) * (1 - t), a: 60 * t - 180 * t * t + 120 * t * t * t }; });
+function arcAccel(g, T) {
+  let m = 0;
+  for (const q of MJ) { const r = g.r + g.dr * q.s, w = g.dth * q.v / T, al = g.dth * q.a / (T * T), rd = g.dr * q.v / T, rdd = g.dr * q.a / (T * T); m = Math.max(m, Math.hypot(rdd - r * w * w, r * al + 2 * rd * w)); }
+  return m;
+}
+const noiseVec = () => Array.from({ length: 6 }, randn);
+// 정책 p 로 물체 o 를 옮기는 한 번의 시도. nz 는 시도마다 다른 불확실성(마찰·힘 오차 등).
+function rollout(p, o, g, nz) {
+  const mu = o.mu * clamp(1 + 0.08 * nz[0], 0.75, 1.25);
+  const N = p.F * clamp(1 + 0.05 * nz[1], 0.8, 1.2);
+  const bF = o.breakF * clamp(1 + 0.05 * nz[2], 0.85, 1.15);
+  const dV = o.dropV * clamp(1 + 0.05 * nz[3], 0.85, 1.15);
+  const { Tl, Tt, Td } = timings(p);
+  const carryBottom = Math.max(g.barrierH, g.platH) + p.clr;
+  const time = 2.6 + Tl + Tt + Td + 0.85;
+  const r = { outcome: 'success', N, time, req: 0, score: 0 };
+  if (N > bF) { r.outcome = 'crush'; r.score = -100 - 10 * Math.min(1, (N - bF) / bF); return r; }
+  if (g.barrierH > g.platH && p.clr + 0.006 * nz[4] < 0.004) { r.outcome = 'collision'; r.score = -100; return r; }
+  const aL = 5.7735 * carryBottom / (Tl * Tl), aH = arcAccel(g, Tt);
+  const aD = 5.7735 * Math.max(0, carryBottom - g.platH - p.hRel) / (Td * Td);
+  const req = o.mass * Math.max(G + aL, Math.hypot(G, aH), G + aD) / (2 * mu);
+  r.req = req;
+  if (N < req) { r.outcome = 'slip'; r.score = -100 - 10 * Math.min(1, (req - N) / req); return r; }
+  if (Math.sqrt(2 * G * Math.max(0, p.hRel + 0.003 * nz[5])) > dV) { r.outcome = 'drop-break'; r.score = -100; return r; }
+  r.score = 100 - 2.5 * time - 12 * (N / FMAX) - 30 * p.clr;   // 실패(-100)는 성공보다 훨씬 비싸다 → 안전 우선
+  return r;
+}
+
+/* ============================================================ 저장 데이터 */
+let DEMOS = store.get('griplab.demos', []);
+let POLICIES = store.get('griplab.policies2', {});
+let CALIB = store.get('griplab.calib2', { open: { t: 0.7, i: 0.45, m: 0.45 }, fist: { t: 2.3, i: 5.0, m: 5.2 } });
+const ROBOTLOG = [], LOG = [];
+const saveDemos = () => { if (DEMOS.length > 3000) DEMOS = DEMOS.slice(-3000); store.set('griplab.demos', DEMOS); };
+const OUT = {
+  success:      { t: '성공',        ic: '✅', cls: 'ok',   msg: '성공! 안전하게 옮겼습니다' },
+  slip:         { t: '미끄러짐',    ic: '⚠️', cls: 'warn', msg: '미끄러짐 — 쥐는 힘이 부족했습니다' },
+  crush:        { t: '쥐다 파손',   ic: '💥', cls: 'bad',  msg: '파손 — 너무 세게 쥐었습니다' },
+  'drop-break': { t: '낙하 파손',   ic: '💥', cls: 'bad',  msg: '낙하 파손 — 너무 높은 곳에서 놓았습니다' },
+  collision:    { t: '장애물 충돌', ic: '🚧', cls: 'warn', msg: '장애물에 부딪혔습니다' },
+  miss:         { t: '목표 밖',     ic: '❌', cls: 'warn', msg: '목표 영역 밖에 놓았습니다' },
+};
+const SRC = { camera: '카메라', manual: '키보드', synthetic: '가상', auto: '로봇' };
+
+/* ============================================================ 상태 */
+const S = {
+  task: null, phase: 'idle', simT: 0, simSpeed: 1,
+  obj: { pos: new THREE.Vector3(), vel: new THREE.Vector3(), off: new THREE.Vector3(), held: false, lifted: false, resting: true, broken: false, mesh: null },
+  servo: { yaw: 0, r: 0.45, y: 0.25, vyaw: 0, vr: 0, vy: 0 },      // 원통 좌표: 몸통 회전각, 뻗은 거리, 높이
+  manual: { yaw: 0, r: 0.45, y: 0.25 }, grip: 0,
+  cam: { on: false, valid: false, curls: { t: 0, i: 0, m: 0 }, lastSeen: 0 },
+  vel: new THREE.Vector3(), acc: new THREE.Vector3(), prevTcp: null,
+  force: { t: 0, i: 0, m: 0, N: 0, req: 0 }, aligned: false, hd: 0, vd: 0,
+  prevMaxCmd: 0, cmdRate: 0, slipT: 0, align: { track: false, ok: false },
+  trial: null, lastOutcome: null,
+  settings: Object.assign({ hint: false, guide: true, autoNext: false, saveDemos: true, mirror: true, gain: 1, depth: 1, arm: 'right', fixed: 'random' }, store.get('griplab.settings', {})),
+};
+const saveSettings = () => store.set('griplab.settings', S.settings);
+
+/* ============================================================ 3D 장면 */
+const view = $('view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.domElement.className = 'gl';
+view.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0e131b); scene.fog = new THREE.Fog(0x0e131b, 3.5, 9);
+const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 50);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.55; controls.minDistance = 0.4; controls.maxDistance = 4;
+const VIEWS = {
+  front: [[0, 1.05, 1.9], [0, 0.2, 0.3]], side: [[1.55, 0.7, 0.42], [0, 0.12, 0.38]],
+  top: [[0, 1.9, 0.62], [0, 0, 0.38]], back: [[0, 0.95, -0.95], [0, 0.1, 0.42]],
+};
+function setView(k) { const [p, t] = VIEWS[k]; camera.position.set(...p); controls.target.set(...t); controls.update(); }
+setView('front');
+function resize() { const w = view.clientWidth, h = view.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w < h ? 68 : 42; camera.updateProjectionMatrix(); }   // 세로 화면은 넓게
+new ResizeObserver(resize).observe(view); resize();
+
+scene.add(new THREE.HemisphereLight(0xd6e6ff, 0x1c2028, 0.9));
+const sun = new THREE.DirectionalLight(0xffffff, 1.7); sun.position.set(1.2, 2.6, 1.7); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -1.3, right: 1.3, top: 1.3, bottom: -1.3, near: 0.5, far: 7 }); sun.shadow.bias = -0.0004;
+scene.add(sun);
+const mk = (geo, mat, shadow = true) => { const m = new THREE.Mesh(geo, mat); m.castShadow = shadow; m.receiveShadow = true; return m; };
+{
+  const tw = TABLE.x1 - TABLE.x0, td = TABLE.z1 - TABLE.z0, cz = (TABLE.z0 + TABLE.z1) / 2;
+  const top = mk(new THREE.BoxGeometry(tw, 0.04, td), new THREE.MeshStandardMaterial({ color: 0x2a323f, roughness: 0.9 }), false); top.position.set(0, -0.02, cz); scene.add(top);
+  const grid = new THREE.GridHelper(1.2, 24, 0x41506a, 0x333e50); grid.position.set(0, 0.0006, cz); scene.add(grid);
+  const legM = new THREE.MeshStandardMaterial({ color: 0x1b212b });
+  for (const [x, z] of [[TABLE.x0 + .05, TABLE.z0 + .05], [TABLE.x1 - .05, TABLE.z0 + .05], [TABLE.x0 + .05, TABLE.z1 - .05], [TABLE.x1 - .05, TABLE.z1 - .05]]) {
+    const leg = mk(new THREE.BoxGeometry(0.05, -TABLE.floor - 0.04, 0.05), legM); leg.position.set(x, (TABLE.floor - 0.04) / 2, z); scene.add(leg);
+  }
+  const floor = mk(new THREE.PlaneGeometry(14, 14), new THREE.MeshStandardMaterial({ color: 0x0b0f15, roughness: 1 }), false); floor.rotation.x = -Math.PI / 2; floor.position.y = TABLE.floor; scene.add(floor);
+}
+
+/* ---------- 로봇팔 */
+class Robot {
+  constructor() {
+    const white = new THREE.MeshStandardMaterial({ color: 0xe9edf3, metalness: 0.25, roughness: 0.42 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x37404e, metalness: 0.6, roughness: 0.35 });
+    const accent = new THREE.MeshStandardMaterial({ color: 0xff7a2f, metalness: 0.2, roughness: 0.45 });
+    const cyl = (r1, r2, h, m) => mk(new THREE.CylinderGeometry(r1, r2, h, 36), m);
+    const cap = (r, len, m) => { const c = mk(new THREE.CapsuleGeometry(r, Math.max(0.001, len - 2 * r), 8, 20), m); c.rotation.x = Math.PI / 2; c.position.z = len / 2; return c; };
+    this.tcp = new THREE.Vector3(0, 0.25, 0.45);
+    this.cmd = { t: 0, i: 0, m: 0 }; this.contact = null; this.force = { t: 0, i: 0, m: 0 };
+    const root = new THREE.Group(); scene.add(root);
+    const base = cyl(0.1, 0.11, 0.06, dark); base.position.y = 0.03; root.add(base);
+    this.yawG = new THREE.Group(); root.add(this.yawG);
+    const tur = cyl(0.072, 0.09, 0.24, white); tur.position.y = 0.18; this.yawG.add(tur);
+    this.shG = new THREE.Group(); this.shG.position.y = ARM.SH_Y; this.yawG.add(this.shG);
+    const shJ = cyl(0.062, 0.062, 0.16, accent); shJ.rotation.z = Math.PI / 2; this.shG.add(shJ);
+    this.shG.add(cap(0.042, ARM.L1, white));
+    this.elG = new THREE.Group(); this.elG.position.z = ARM.L1; this.shG.add(this.elG);
+    const elJ = cyl(0.05, 0.05, 0.13, accent); elJ.rotation.z = Math.PI / 2; this.elG.add(elJ);
+    this.elG.add(cap(0.034, ARM.L2, white));
+    this.wrG = new THREE.Group(); this.wrG.position.z = ARM.L2; this.elG.add(this.wrG);
+    const wrJ = cyl(0.03, 0.03, 0.09, dark); wrJ.rotation.z = Math.PI / 2; this.wrG.add(wrJ);
+    this.rollG = new THREE.Group(); this.wrG.add(this.rollG);
+    const link = cyl(0.022, 0.022, 0.07, white); link.rotation.x = Math.PI / 2; link.position.z = 0.035; this.rollG.add(link);
+    const palm = mk(new THREE.BoxGeometry(0.086, 0.04, 0.034), dark); palm.position.z = 0.083; this.rollG.add(palm);   // 납작한 손바닥: 낮은 물체도 옆에서 잡는다
+    this.fingers = [];
+    for (const [k, az] of [['t', 0], ['i', Math.PI - 0.4], ['m', Math.PI + 0.4]]) {
+      const rootG = new THREE.Group(); rootG.rotation.z = az; this.rollG.add(rootG);
+      const hinge = new THREE.Group(); hinge.position.set(GR.base, 0, GR.palmZ); rootG.add(hinge);
+      const kn = mk(new THREE.SphereGeometry(0.012, 16, 12), accent); hinge.add(kn);
+      hinge.add(cap(0.0095, GR.L1, white));
+      const dist = new THREE.Group(); dist.position.z = GR.L1; hinge.add(dist);
+      dist.add(mk(new THREE.SphereGeometry(0.0105, 16, 12), accent));
+      dist.add(cap(0.0085, GR.L2, white));
+      const padMat = new THREE.MeshStandardMaterial({ color: 0x55606f, roughness: 0.8, emissive: 0x000000 });
+      const pad = mk(new THREE.SphereGeometry(0.0105, 16, 12), padMat); pad.position.set(-0.003, 0, GR.L2 - 0.004); pad.scale.set(0.8, 1.1, 1.2); dist.add(pad);
+      this.fingers.push({ k, hinge, dist, padMat });
+    }
+  }
+  update() {
+    // 그리퍼는 수평으로 바깥(몸통 반대쪽)을 향한다 → 손목은 TCP 에서 LT 만큼 몸통 쪽
+    const p = this.tcp, yaw = Math.atan2(p.x, p.z), rho = Math.hypot(p.x, p.z) - ARM.LT, h = p.y - ARM.SH_Y;
+    const d = clamp(Math.hypot(rho, h), Math.abs(ARM.L1 - ARM.L2) + 0.01, ARM.L1 + ARM.L2 - 0.001);
+    const q2 = Math.acos(clamp((d * d - ARM.L1 ** 2 - ARM.L2 ** 2) / (2 * ARM.L1 * ARM.L2), -1, 1));
+    const q1 = Math.atan2(h, rho) + Math.atan2(ARM.L2 * Math.sin(q2), ARM.L1 + ARM.L2 * Math.cos(q2));
+    const q3 = -(q1 - q2);
+    this.yawG.rotation.y = yaw; this.shG.rotation.x = -q1; this.elG.rotation.x = q2; this.wrG.rotation.x = -q3;
+    this.q = { yaw, q1, q2, q3 };
+    for (const f of this.fingers) {
+      let c = Math.min(this.cmd[f.k], 1); if (this.contact != null) c = Math.min(c, this.contact);
+      const { a, b } = fingerAngles(c); f.hinge.rotation.y = a; f.dist.rotation.y = -b;
+      const u = clamp(this.force[f.k] / (f.k === 't' ? FMAX_T : FMAX_F), 0, 1);
+      if (u > 0) { f.padMat.color.setHSL(lerp(0.5, 0.02, Math.sqrt(u)), 0.9, 0.55); f.padMat.emissive.setHSL(lerp(0.5, 0.02, Math.sqrt(u)), 0.9, 0.18); }
+      else { f.padMat.color.setHex(0x55606f); f.padMat.emissive.setHex(0); }
+    }
+  }
+}
+const robot = new Robot();
+
+/* ---------- 그리퍼 아래 표시(깊이감 보조) */
+const dropLine = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 }));
+scene.add(dropLine);
+const dropRing = new THREE.Mesh(new THREE.RingGeometry(0.022, 0.027, 40), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, side: THREE.DoubleSide }));
+dropRing.rotation.x = -Math.PI / 2; scene.add(dropRing);
+// 몸통을 회전시키면 그리퍼가 지나갈 원호
+const arcRing = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 96 }, (_, k) => new THREE.Vector3(Math.sin(k / 96 * 6.2832), 0, Math.cos(k / 96 * 6.2832)))), new THREE.LineBasicMaterial({ color: 0xff7a2f, transparent: true, opacity: 0.3 }));
+arcRing.position.y = 0.0015; scene.add(arcRing);
+
+/* ---------- 물체 메시 */
+function makeObjMesh(key) {
+  const o = OBJ[key], g = new THREE.Group();
+  const std = (c, x = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.55, ...x });
+  const add = (m, y = 0) => { m.position.y = y; g.add(m); return m; };
+  if (o.shape === 'egg') { const m = add(mk(new THREE.SphereGeometry(o.r, 32, 24), std(o.color, { roughness: 0.75 }))); m.scale.y = (o.h / 2) / o.r; }
+  else if (o.shape === 'box') add(mk(new THREE.BoxGeometry(o.r * 2, o.h, o.r * 2), std(o.color, key === 'iron' ? { metalness: 0.85, roughness: 0.35 } : { roughness: 0.9 })));
+  else if (o.shape === 'sphere') {
+    add(mk(new THREE.SphereGeometry(o.r, 32, 24), std(o.color, { roughness: key === 'ball' ? 0.95 : 0.35 })));
+    if (key === 'apple') add(mk(new THREE.CylinderGeometry(0.002, 0.003, 0.02, 8), std(0x5a3a1c)), o.r + 0.006);
+  } else if (o.shape === 'glass') {
+    add(mk(new THREE.CylinderGeometry(o.r, o.r * 0.86, o.h, 36, 1, true), new THREE.MeshPhysicalMaterial({ color: o.color, transparent: true, opacity: 0.38, roughness: 0.05, metalness: 0, side: THREE.DoubleSide })));
+    add(mk(new THREE.CylinderGeometry(o.r * 0.86, o.r * 0.86, 0.008, 36), std(o.color, { transparent: true, opacity: 0.6, roughness: 0.1 })), -o.h / 2 + 0.004);
+  } else if (o.shape === 'cup') {
+    add(mk(new THREE.CylinderGeometry(o.r, o.r * 0.74, o.h, 36, 1, true), std(o.color, { side: THREE.DoubleSide, roughness: 0.9 })));
+    add(mk(new THREE.CylinderGeometry(o.r * 0.74, o.r * 0.74, 0.004, 36), std(o.color)), -o.h / 2 + 0.002);
+    add(mk(new THREE.CylinderGeometry(o.r * 0.95, o.r * 0.95, 0.002, 36), std(0x3aa0ff, { transparent: true, opacity: 0.8, roughness: 0.1 }), false), o.h / 2 - 0.012);
+  } else if (o.shape === 'bulb') {
+    add(mk(new THREE.SphereGeometry(o.r, 32, 24), new THREE.MeshPhysicalMaterial({ color: o.color, transparent: true, opacity: 0.6, roughness: 0.08, emissive: 0xffd76a, emissiveIntensity: 0.25 })), o.h / 2 - o.r);
+    add(mk(new THREE.CylinderGeometry(o.r * 0.5, o.r * 0.42, o.h - o.r * 1.7, 20), std(0x9aa3ae, { metalness: 0.8, roughness: 0.4 })), -o.h / 2 + (o.h - o.r * 1.7) / 2);
+  }
+  return g;
+}
+const PARTS = [], partGeo = new THREE.TetrahedronGeometry(0.007);
+function burst(pos, color, n = 28, spd = 1.1) {
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.4 });
+  for (let k = 0; k < n; k++) {
+    const m = new THREE.Mesh(partGeo, mat); m.position.copy(pos); m.scale.setScalar(rand(0.5, 1.6)); scene.add(m);
+    const a = rand(0, Math.PI * 2), s = rand(0.2, 1) * spd;
+    PARTS.push({ m, v: new THREE.Vector3(Math.cos(a) * s, rand(0.3, 1.4) * spd, Math.sin(a) * s), life: rand(1.2, 2) });
+  }
+}
+function particlesStep(dt) {
+  for (let i = PARTS.length - 1; i >= 0; i--) {
+    const p = PARTS[i]; p.v.y -= G * dt; p.m.position.addScaledVector(p.v, dt); p.m.rotation.x += dt * 6; p.m.rotation.y += dt * 4;
+    if (p.m.position.y < 0.004 && p.m.position.x > TABLE.x0 && p.m.position.x < TABLE.x1 && p.m.position.z > TABLE.z0 && p.m.position.z < TABLE.z1) { p.m.position.y = 0.004; p.v.set(0, 0, 0); }
+    if ((p.life -= dt) <= 0) { scene.remove(p.m); PARTS.splice(i, 1); }
+  }
+}
+function breakVisual() {
+  const T = S.task, m = S.obj.mesh, o = T.o, pos = S.obj.pos;
+  const tint = c => m.traverse(ch => { if (ch.material) { ch.material = ch.material.clone(); ch.material.color.setHex(c); } });
+  if (o.shape === 'egg') { m.scale.set(1.5, 0.3, 1.5); tint(0xffc93c); burst(pos, 0xf2e2c4, 22, 0.8); }
+  else if (o.shape === 'glass' || o.shape === 'bulb') { m.scale.set(1.1, 0.15, 1.1); burst(pos, 0xcfeaff, 46, 1.4); }
+  else if (o.shape === 'cup') { m.scale.set(1.25, 0.45, 0.7); burst(pos, 0x3aa0ff, 30, 0.9); }
+  else if (key(T) === 'tofu') { m.scale.set(1.35, 0.45, 1.35); burst(pos, 0xf7f4ea, 30, 0.7); }
+  else { m.scale.set(1.12, 0.78, 1.12); tint(0x6b3b22); burst(pos, 0x8a4a2a, 14, 0.6); }
+}
+const key = T => T.key;
+
+/* ============================================================ 과제 */
+const taskGroup = new THREE.Group(); scene.add(taskGroup);
+function pickObject() { return S.settings.fixed !== 'random' && OBJ[S.settings.fixed] ? S.settings.fixed : OBJ_KEYS[Math.floor(Math.random() * OBJ_KEYS.length)]; }
+function newTask(k, same = false) {
+  stopAuto(true);
+  const prev = S.task;
+  let T;
+  if (same && prev) T = { ...prev };
+  else {
+    k = k || pickObject(); const o = OBJ[k];
+    // 로봇을 중심으로 한 원호 위에 물체와 목표를 놓는다 → 몸통 회전으로 옮기는 과제
+    const ro = rand(0.44, 0.64), rt = rand(0.44, 0.64), dth = rand(0.96, 1.92) * (Math.random() < 0.5 ? -1 : 1);
+    const lim = 1.3 - Math.abs(dth) / 2, mid = rand(-lim, lim), tho = mid - dth / 2, tht = mid + dth / 2;
+    const ox = ro * Math.sin(tho), oz = ro * Math.cos(tho), tx = rt * Math.sin(tht), tz = rt * Math.cos(tht);
+    const platH = [0, 0.05, 0.1][Math.floor(Math.random() * 3)];
+    // 장애물은 둘 사이에 방사 방향으로 놓인 벽 → 회전할 때 넘어가야 한다
+    const barrier = Math.random() < 0.6 ? { x: 0.5 * Math.sin(mid), z: 0.5 * Math.cos(mid), len: 0.5, th: 0.03, h: rand(0.03, 0.11), yaw: mid - Math.PI / 2 } : null;
+    T = { key: k, o, ox, oz, geo: { r: r2(ro), dr: r2(rt - ro), dth: r2(Math.abs(dth)) }, plat: { x: tx, z: tz, w: 0.17, h: platH }, barrier, cC: contactCurl(o.r) };
+  }
+  // 시도마다 조금씩 다른 실제 조건(로봇·사람은 이 값을 모른다)
+  T.mu = T.o.mu * clamp(1 + 0.08 * randn(), 0.75, 1.25);
+  T.breakF = T.o.breakF * clamp(1 + 0.05 * randn(), 0.85, 1.15);
+  T.dropV = T.o.dropV * clamp(1 + 0.05 * randn(), 0.85, 1.15);
+  T.forceNoise = clamp(0.05 * randn(), -0.2, 0.2);
+  S.task = T;
+  // 장면 구성
+  taskGroup.clear();
+  const p = T.plat, zoneMat = new THREE.MeshStandardMaterial({ color: 0x1f8f62, emissive: 0x0f6f48, emissiveIntensity: 0.6, roughness: 0.7 });
+  if (p.h > 0) { const st = mk(new THREE.BoxGeometry(p.w, p.h, p.w), new THREE.MeshStandardMaterial({ color: 0x24303f, roughness: 0.8 })); st.position.set(p.x, p.h / 2, p.z); taskGroup.add(st); }
+  const zp = mk(new THREE.PlaneGeometry(p.w, p.w), zoneMat, false); zp.rotation.x = -Math.PI / 2; zp.position.set(p.x, p.h + 0.0012, p.z); taskGroup.add(zp);
+  const edge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(p.w, 0.001, p.w)), new THREE.LineBasicMaterial({ color: 0x3ddc97 })); edge.position.set(p.x, p.h + 0.002, p.z); taskGroup.add(edge);
+  T.zoneMat = zoneMat;
+  if (T.barrier) { const b = T.barrier, bm = mk(new THREE.BoxGeometry(b.len, b.h, b.th), new THREE.MeshStandardMaterial({ color: 0xd98a2b, roughness: 0.7 })); bm.position.set(b.x, b.h / 2, b.z); bm.rotation.y = b.yaw; taskGroup.add(bm); }
+  const os = S.obj; os.mesh = makeObjMesh(T.key); taskGroup.add(os.mesh);
+  os.pos.set(T.ox, T.o.h / 2, T.oz); os.vel.set(0, 0, 0); os.held = false; os.lifted = false; os.resting = true; os.broken = false; os.mesh.position.copy(os.pos);
+  S.phase = 'ready'; S.slipT = 0; S.align.track = false; S.align.ok = false; S.lastOutcome = null;
+  S.trial = { src: null, Ns: [], heldNs: [], maxN: 0, peakAcc: 0, liftT: 0, relT: 0, maxBottom: 0, releaseH: 0, curls: null, preMin: 9, shares: [] };
+  renderTaskCard(); renderObjGrid();
+}
+function supportAt(x, z) {
+  if (!(x > TABLE.x0 && x < TABLE.x1 && z > TABLE.z0 && z < TABLE.z1)) return { h: TABLE.floor, kind: 'floor' };
+  let h = 0, kind = 'table'; const T = S.task;
+  if (Math.hypot(x, z) < 0.11) { h = 0.06; kind = 'base'; }
+  if (T) {
+    const p = T.plat; if (Math.abs(x - p.x) < p.w / 2 && Math.abs(z - p.z) < p.w / 2) { h = p.h; kind = 'zone'; }
+    const b = T.barrier; if (b && b.h > h) { const [lx, lz] = barrierLocal(b, x, z); if (Math.abs(lx) < b.len / 2 && Math.abs(lz) < b.th / 2) { h = b.h; kind = 'barrier'; } }
+  }
+  return { h, kind };
+}
+function barrierLocal(b, x, z) { const dx = x - b.x, dz = z - b.z, c = Math.cos(b.yaw), s = Math.sin(b.yaw); return [dx * c - dz * s, dx * s + dz * c]; }
+function hitsBarrier(pos, o) {
+  const b = S.task.barrier; if (!b) return false;
+  const [lx, lz] = barrierLocal(b, pos.x, pos.z);
+  return Math.abs(lx) < b.len / 2 + o.r * 0.9 && Math.abs(lz) < b.th / 2 + o.r * 0.9 && pos.y - o.h / 2 < b.h - 0.002;
+}
+
+/* ============================================================ 물리 */
+const cylOf = (x, z) => ({ yaw: Math.atan2(x, z), r: Math.hypot(x, z) });
+const setTcpCyl = (yaw, r, y) => robot.tcp.set(r * Math.sin(yaw), y, r * Math.cos(yaw));
+const Y_MIN = 0.034;                                    // 수평 그리퍼가 바닥에 닿지 않는 최소 높이
+const alignTol = o => Math.max(0.018, o.r * 0.6);
+function clampCyl(c) { c.yaw = clamp(c.yaw, -1.9, 1.9); c.r = clamp(c.r, 0.32, 0.8); c.y = clamp(c.y, Y_MIN, 0.62); return c; }
+function constrainTCP() {
+  const tcp = robot.tcp, os = S.obj, T = S.task; let minY;
+  if (T && os.held && (os.lifted || S.force.N >= S.force.req)) { const s = supportAt(tcp.x + os.off.x, tcp.z + os.off.z); minY = Math.max(Y_MIN, Math.max(0, s.h) - (os.off.y - T.o.h / 2)); }
+  else {                                                // 그리퍼 몸체(손끝~손목) 아래의 가장 높은 면 위로
+    const c = cylOf(tcp.x, tcp.z), ux = Math.sin(c.yaw), uz = Math.cos(c.yaw); let h = 0;
+    for (const b of [0, 0.07, 0.13, 0.19]) h = Math.max(h, supportAt(tcp.x - ux * b, tcp.z - uz * b).h);
+    minY = h + Y_MIN;
+  }
+  if (tcp.y < minY) { tcp.y = minY; S.servo.y = minY; if (S.servo.vy < 0) S.servo.vy = 0; }
+}
+function detach(asFalling) {
+  const os = S.obj; os.held = false; os.lifted = false; S.slipT = 0;
+  if (asFalling) { os.resting = false; os.vel.copy(S.vel); if (os.vel.length() > 2.5) os.vel.setLength(2.5); }
+}
+function physicsStep(dt) {
+  const T = S.task; if (!T || dt <= 0) return;
+  const os = S.obj, o = T.o, tcp = robot.tcp, cmd = robot.cmd, cC = T.cC;
+  // 그리퍼 속도·가속도(관성 하중 계산용)
+  if (!S.prevTcp) S.prevTcp = tcp.clone();
+  const v = tcp.clone().sub(S.prevTcp).divideScalar(dt), a = v.clone().sub(S.vel).divideScalar(dt);
+  S.prevTcp.copy(tcp); S.vel.copy(v); S.acc.lerp(a, 1 - Math.exp(-dt / 0.06)); if (S.acc.length() > 30) S.acc.setLength(30);
+  const maxCmd = Math.max(cmd.t, cmd.i, cmd.m);
+  S.cmdRate = lerp(S.cmdRate, (maxCmd - S.prevMaxCmd) / dt, 1 - Math.exp(-dt / 0.12)); S.prevMaxCmd = maxCmd;
+  // 정렬·접촉
+  const hd = Math.hypot(tcp.x - os.pos.x, tcp.z - os.pos.z), vd = tcp.y - os.pos.y, tol = alignTol(o);
+  S.hd = hd; S.vd = vd;
+  const near = !os.broken && os.resting && hd < tol && Math.abs(vd) < o.h * 0.35;
+  const aligned = os.held || near; S.aligned = aligned;
+  let Ft = 0, Fi = 0, Fm = 0;
+  if (aligned) {
+    if (!S.align.track) { S.align.track = true; S.align.ok = maxCmd < cC; }
+    if (maxCmd < cC) S.align.ok = true;           // 손을 벌린 상태로 물체를 감싸야 잡을 수 있다
+    if (S.align.ok || os.held) { Ft = fingerForce(cmd.t, cC, FMAX_T); Fi = fingerForce(cmd.i, cC, FMAX_F); Fm = fingerForce(cmd.m, cC, FMAX_F); }
+  } else { S.align.track = false; S.align.ok = false; }
+  robot.contact = aligned && (S.align.ok || os.held) ? cC : null;
+  const N = Math.min(Ft, Fi + Fm), Nside = Math.max(Ft, Fi + Fm);
+  const req = o.mass * Math.hypot(S.acc.x, S.acc.y + G, S.acc.z) / (2 * T.mu);   // 미끄러지지 않기 위한 최소 수직력
+  S.force = { t: Ft, i: Fi, m: Fm, N, req }; robot.force = S.force;
+  const tr = S.trial, gripping = Ft > 0.02 && Fi + Fm > 0.02;
+  if (S.phase === 'ready' && !os.held && hd < 0.1) tr.preMin = Math.min(tr.preMin, maxCmd);
+
+  if (!os.held && near && S.phase === 'ready' && gripping) {
+    os.held = true; os.lifted = false; os.off.copy(os.pos).sub(tcp); S.slipT = 0;
+    tr.src = AUTO.running ? 'auto' : (S.cam.valid ? 'camera' : 'manual');
+  }
+  if (os.held) {
+    tr.maxN = Math.max(tr.maxN, Nside);
+    if (Nside > T.breakF) { os.broken = true; breakVisual(); detach(os.lifted); finishTrial('crush'); }
+    else if (!gripping) {                                   // 손을 폈다
+      if (os.lifted) release(); else detach(false);
+    } else if (!os.lifted) {
+      tr.heldNs.push(N);
+      if (N >= req) {                                       // 충분히 쥐었다 → 그리퍼를 따라 움직인다
+        os.pos.copy(tcp).add(os.off);
+        const sup = supportAt(os.pos.x, os.pos.z), bottom = os.pos.y - o.h / 2 - Math.max(sup.h, 0);
+        if (bottom > 0.008) {
+          os.lifted = true; os.resting = false; S.phase = 'carry'; tr.liftT = S.simT;
+          tr.curls = { t: r3(cmd.t / GR.cmdScale), i: r3(cmd.i / GR.cmdScale), m: r3(cmd.m / GR.cmdScale) };
+        }
+      } else {                                              // 힘 부족 → 물체는 그대로, 손가락만 미끄러진다
+        const rise = tcp.y - (os.pos.y - os.off.y);
+        if (rise > 0.015) { detach(false); finishTrial('slip'); }
+        else if (hd > tol + 0.012) detach(false);
+      }
+    } else {
+      os.pos.copy(tcp).add(os.off); os.vel.copy(S.vel);
+      const sup = supportAt(os.pos.x, os.pos.z), bottom = os.pos.y - o.h / 2 - sup.h;
+      tr.Ns.push(N); tr.shares.push(Ft / (Ft + Fi + Fm + 1e-9)); tr.peakAcc = Math.max(tr.peakAcc, S.acc.length());
+      tr.maxBottom = Math.max(tr.maxBottom, os.pos.y - o.h / 2);
+      if (hitsBarrier(os.pos, o)) { detach(true); os.vel.multiplyScalar(-0.3); finishTrial('collision'); }
+      else {
+        S.slipT = N < req ? S.slipT + dt : 0;
+        if (S.slipT > 0.05) {
+          const opening = S.cmdRate < -0.1 || maxCmd < cC;
+          if (opening || bottom < 0.03) release(); else { detach(true); finishTrial('slip'); }
+        }
+      }
+    }
+  }
+  // 자유 낙하
+  if (!os.held && !os.resting) {
+    os.vel.y -= G * dt; os.pos.addScaledVector(os.vel, dt);
+    const sup = supportAt(os.pos.x, os.pos.z);
+    if (os.pos.y - o.h / 2 <= sup.h) {
+      const impact = -os.vel.y; os.pos.y = sup.h + o.h / 2; os.vel.set(0, 0, 0); os.resting = true;
+      if (!os.broken && impact > T.dropV) { os.broken = true; breakVisual(); }
+      if (S.phase === 'released') finishTrial(os.broken ? 'drop-break' : sup.kind === 'zone' ? 'success' : 'miss');
+    }
+  }
+  os.mesh.position.copy(os.pos);
+}
+function release() {
+  const os = S.obj, o = S.task.o, tr = S.trial;
+  tr.releaseH = Math.max(0, os.pos.y - o.h / 2 - supportAt(os.pos.x, os.pos.z).h); tr.relT = S.simT;
+  detach(true); S.phase = 'released';
+}
+function finishTrial(outcome) {
+  if (S.phase === 'done' || !S.task) return;
+  S.phase = 'done'; S.lastOutcome = outcome;
+  const T = S.task, tr = S.trial, obstacle = Math.max(T.barrier ? T.barrier.h : 0, T.plat.h);
+  const rec = {
+    id: Date.now() + '-' + Math.floor(Math.random() * 1e5), at: Date.now(), obj: T.key,
+    src: tr.src || (AUTO.running ? 'auto' : S.cam.valid ? 'camera' : 'manual'), outcome,
+    gripN: r2(tr.Ns.length ? median(tr.Ns) : tr.heldNs.length ? tr.heldNs[tr.heldNs.length - 1] : 0), maxN: r2(tr.maxN), peakAcc: r2(tr.peakAcc),
+    carryTime: r2(tr.liftT ? (tr.relT || S.simT) - tr.liftT : 0), liftClear: r3(tr.maxBottom - obstacle), releaseH: r3(tr.releaseH),
+    curls: tr.curls, pre: tr.preMin < 9 ? r3(tr.preMin / GR.cmdScale) : null, share: r2(tr.shares.length ? median(tr.shares) : 0.5),
+    geom: { ...T.geo, barrierH: r3(T.barrier ? T.barrier.h : 0), platH: T.plat.h },
+  };
+  if (rec.src === 'auto') { rec.policy = AUTO.label; ROBOTLOG.unshift(rec); renderRobotList(); }
+  else if (S.settings.saveDemos) { DEMOS.push(rec); saveDemos(); renderDemos(); drawForceWin(); }
+  LOG.unshift(rec); if (LOG.length > 40) LOG.pop(); renderLog();
+  const O = OUT[outcome];
+  if (outcome === 'success') T.zoneMat.emissive.setHex(0x3ddc97);
+  toast(`${O.ic} ${O.msg}`, O.cls, `${T.o.name} · 쥔 힘 ${(rec.gripN || rec.maxN).toFixed(1)} N`);
+  if (AUTO.running && outcome !== 'success') stopAuto(true);
+  if (rec.src === 'auto') { if (AUTO.loop > 0) { AUTO.loop--; setTimeout(() => { if (S.phase === 'done') { newTask(); startAuto(); } }, 1700 / S.simSpeed); } }
+  else if (S.settings.autoNext) setTimeout(() => { if (S.phase === 'done') newTask(); }, 2200);
+}
+
+/* ============================================================ 입력: 방향키 회전 / 기울기 센서 / 서보 */
+const KEYS = new Set();
+addEventListener('keydown', e => {
+  if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.target.type !== 'range' && e.target.type !== 'checkbox') return;
+  const k = e.key.toLowerCase(); KEYS.add(k);
+  if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+  if (e.repeat) return;
+  if (k === 'n') newTask(); if (k === ' ') startAuto();
+});
+addEventListener('keyup', e => KEYS.delete(e.key.toLowerCase()));
+addEventListener('blur', () => KEYS.clear());
+function syncGripUI() { $('gripSlider').value = S.grip; $('gripVal').textContent = Math.round(S.grip * 100) + '%'; }
+
+// 스마트폰·태블릿: 기기를 기울인 각도에 비례한 속도로 회전(좌우) · 올리기/내리기(앞뒤)
+const TILT = { on: false, zero: false, lr0: 0, fb0: 0, lr: 0, fb: 0 };
+function onTilt(e) {
+  if (e.beta == null || e.gamma == null) return;
+  const ang = ((screen.orientation?.angle ?? window.orientation ?? 0) % 360 + 360) % 360;   // 화면 방향(세로/가로)에 맞춰 축을 바꾼다
+  let lr = e.gamma, fb = e.beta;
+  if (ang === 90) { lr = e.beta; fb = -e.gamma; } else if (ang === 270) { lr = -e.beta; fb = e.gamma; } else if (ang === 180) { lr = -e.gamma; fb = -e.beta; }
+  if (!TILT.zero) { TILT.lr0 = lr; TILT.fb0 = fb; TILT.zero = true; toast('📱 기울기 센서 켜짐', 'ok', '지금 자세가 기준 · 좌우 기울이면 회전, 앞뒤 기울이면 내리기/올리기'); }
+  TILT.lr = lr - TILT.lr0; TILT.fb = fb - TILT.fb0;
+}
+async function toggleTilt() {
+  const btn = $('btnTilt');
+  if (TILT.on) { TILT.on = false; removeEventListener('deviceorientation', onTilt); btn.classList.remove('primary'); btn.textContent = '📱 기울기 센서'; return; }
+  try {
+    if (typeof DeviceOrientationEvent === 'undefined') throw new Error('이 기기·브라우저는 기울기 센서를 지원하지 않습니다');
+    if (typeof DeviceOrientationEvent.requestPermission === 'function' && await DeviceOrientationEvent.requestPermission() !== 'granted') throw new Error('센서 사용 권한이 거부되었습니다');
+    TILT.on = true; TILT.zero = false; TILT.lr = TILT.fb = 0; addEventListener('deviceorientation', onTilt);
+    btn.classList.add('primary'); btn.textContent = '📱 기울기 끄기';
+    setTimeout(() => { if (TILT.on && !TILT.zero) toast('기울기 값이 들어오지 않습니다', 'warn', 'https 주소로 연 스마트폰·태블릿에서만 동작합니다'); }, 1500);
+  } catch (err) { toast('기울기 센서를 켤 수 없습니다', 'bad', err.message || String(err)); }
+}
+const tiltRate = d => Math.sign(d) * clamp((Math.abs(d) - 5) / 22, 0, 1);   // 5° 이내는 무시, 27° 에서 최대 속도
+
+function manualInput(dt) {
+  const slow = KEYS.has('shift'), m = S.manual, on = (...ks) => ks.some(k => KEYS.has(k));
+  let dyaw = 0, dy = 0, dr = 0;
+  if (on('arrowleft', 'a')) dyaw -= 1; if (on('arrowright', 'd')) dyaw += 1;      // 몸통 회전
+  if (on('arrowup', 'r')) dy += 1; if (on('arrowdown', 'f')) dy -= 1;             // 팔 올리기 / 내리기
+  if (on('w')) dr += 1; if (on('s')) dr -= 1;                                     // 팔 뻗기 / 당기기
+  if (TILT.on && TILT.zero) { dyaw += tiltRate(TILT.lr); dy += tiltRate(TILT.fb); }
+  m.yaw += clamp(dyaw, -1, 1) * (slow ? 0.22 : 1.1) * dt; m.y += clamp(dy, -1, 1) * (slow ? 0.06 : 0.28) * dt; m.r += dr * (slow ? 0.06 : 0.28) * dt;
+  clampCyl(m);
+  const gs = (slow ? 0.06 : 0.35) * dt; let ch = false;
+  if (KEYS.has('x')) { S.grip = clamp(S.grip + gs, 0, 1); ch = true; } if (KEYS.has('z')) { S.grip = clamp(S.grip - gs, 0, 1); ch = true; }
+  if (ch) syncGripUI();
+}
+function controlStep(dt) {
+  const sv = S.servo, m = S.manual;
+  // 축마다 임계 감쇠 서보(속도·가속 한계 포함): 입력 떨림을 걸러내고 실제 로봇 관절처럼 따라간다
+  const ax = (x, v, tg, aMax, vMax) => { const a = clamp(70 * (tg - x) - 2 * Math.sqrt(70) * v, -aMax, aMax); v = clamp(v + a * dt, -vMax, vMax); return [x + v * dt, v]; };
+  [sv.yaw, sv.vyaw] = ax(sv.yaw, sv.vyaw, m.yaw, 14, 2.4);
+  [sv.r, sv.vr] = ax(sv.r, sv.vr, m.r, 9, 1);
+  [sv.y, sv.vy] = ax(sv.y, sv.vy, m.y, 9, 1);
+  setTcpCyl(sv.yaw, sv.r, sv.y);
+  const c = S.cam.valid ? S.cam.curls : null;             // 손가락: 카메라가 손을 보고 있으면 손, 아니면 슬라이더
+  robot.cmd.t = (c ? c.t : S.grip) * GR.cmdScale; robot.cmd.i = (c ? c.i : S.grip) * GR.cmdScale; robot.cmd.m = (c ? c.m : S.grip) * GR.cmdScale;
+}
+
+/* ============================================================ 로봇 자동 수행 */
+const AUTO = { running: false, segs: [], i: 0, t: 0, loop: 0, label: '', from: { yaw: 0, r: 0.45, y: 0.25 }, cmdFrom: 0 };
+function currentPolicy() {
+  const T = S.task, want = $('autoPolicy').value;
+  if (want === 'learned' && T && POLICIES[T.key]) return { p: POLICIES[T.key], label: '학습 정책' };
+  return { p: DEFAULT_POLICY, label: want === 'learned' ? '기본값(미학습)' : '기본값' };
+}
+function startAuto() {
+  if (AUTO.running) return;
+  if (!S.task || S.phase !== 'ready' || S.obj.held) newTask(S.task && S.phase !== 'ready' ? S.task.key : undefined);
+  const T = S.task, o = T.o, os = S.obj, { p, label } = currentPolicy(), tm = timings(p);
+  const cmdT = cmdForForce(p.F * (1 + T.forceNoise), T.cC), cmdPre = clamp((p.pre ?? 0.08) * GR.cmdScale, 0, T.cC - 0.1);
+  const cur = { ...cylOf(robot.tcp.x, robot.tcp.z), y: robot.tcp.y }, co = cylOf(os.pos.x, os.pos.z), ct = cylOf(T.plat.x, T.plat.z);
+  const yG = Math.max(os.pos.y, Y_MIN + 0.001), up = yG - os.pos.y;               // 낮은 물체는 중심보다 조금 위를 잡는다
+  const obstacle = Math.max(T.barrier ? T.barrier.h : 0, T.plat.h), back = 0.11;
+  const carryY = obstacle + p.clr + o.h / 2 + up, relY = T.plat.h + p.hRel + o.h / 2 + up;
+  const safeY = Math.max(obstacle + Y_MIN + 0.03, cur.y), pre = Math.max(0.32, co.r - back);
+  AUTO.segs = [
+    { to: { yaw: cur.yaw, r: cur.r, y: safeY }, dur: 0.25 + Math.abs(safeY - cur.y) / 0.4, cmd: cmdPre, name: '상승' },
+    { to: { yaw: co.yaw, r: pre, y: safeY }, dur: Math.max(0.7, Math.abs(co.yaw - cur.yaw) / 1.5), name: '물체 쪽으로 회전' },
+    { to: { yaw: co.yaw, r: pre, y: yG }, dur: 0.7, name: '하강' },
+    { to: { yaw: co.yaw, r: co.r, y: yG }, dur: 0.7, name: '수평 접근' },
+    { dur: 0.6, cmd: cmdT, name: '쥐기' },
+    { to: { yaw: co.yaw, r: co.r, y: carryY }, dur: tm.Tl, name: '들어올리기' },
+    { to: { yaw: ct.yaw, r: ct.r, y: carryY }, dur: tm.Tt, name: '회전 운반' },
+    { to: { yaw: ct.yaw, r: ct.r, y: relY }, dur: tm.Td, name: '내려놓기' },
+    { dur: 0.25, cmd: 0.02, name: '놓기' },
+    { dur: 0.6, name: '확인' },
+    { to: { yaw: ct.yaw, r: Math.max(0.32, ct.r - back), y: relY }, dur: 0.6, name: '후퇴' },
+  ];
+  Object.assign(AUTO, { running: true, i: 0, t: 0, label, from: cur, cmdFrom: robot.cmd.t });
+  $('autoBadge').classList.remove('hidden');
+  $('autoStatus').textContent = `${o.name}: 목표 힘 ${p.F.toFixed(1)} N · 운반 ${p.T.toFixed(2)} s · 여유 ${(p.clr * 100).toFixed(1)} cm · 놓는 높이 ${(p.hRel * 100).toFixed(1)} cm (${label})`;
+}
+function stopAuto(keepLoop) {
+  if (!keepLoop) AUTO.loop = 0;
+  if (!AUTO.running) return;
+  AUTO.running = false; $('autoBadge').classList.add('hidden');
+  const c = cylOf(robot.tcp.x, robot.tcp.z);
+  Object.assign(S.servo, { yaw: c.yaw, r: c.r, y: robot.tcp.y, vyaw: 0, vr: 0, vy: 0 }); Object.assign(S.manual, { yaw: c.yaw, r: c.r, y: robot.tcp.y });
+  S.grip = clamp(robot.cmd.t / GR.cmdScale, 0, 1); syncGripUI();
+}
+function autoStep(dt) {
+  const A = AUTO, sg = A.segs[A.i]; if (!sg) { stopAuto(true); return; }
+  A.t += dt; const s = clamp(A.t / sg.dur, 0, 1), f = A.from;
+  if (sg.to) { const m = minJerk(s); setTcpCyl(lerp(f.yaw, sg.to.yaw, m), lerp(f.r, sg.to.r, m), lerp(f.y, sg.to.y, m)); }
+  if (sg.cmd != null) { const c = lerp(A.cmdFrom, sg.cmd, s); robot.cmd.t = robot.cmd.i = robot.cmd.m = c; }
+  $('autoBadge').textContent = `🤖 자동 수행 — ${A.label} · ${sg.name}`;
+  if (A.t >= sg.dur) { A.i++; A.t = 0; if (sg.to) A.from = { ...sg.to }; A.cmdFrom = robot.cmd.t; if (A.i >= A.segs.length) stopAuto(true); }
+}
+
+/* ============================================================ 카메라 추적 (MediaPipe 손 인식) */
+const TV = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const HAND_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+const video = $('video'), overlay = $('overlay');
+const TRK = { hand: null, lastVT: -1, lastTs: 0, raw: null, cal: null, f: { t: new OneEuro(2, 0.8), i: new OneEuro(2, 0.8), m: new OneEuro(2, 0.8) } };
+const HAND_CONN = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+const sub3 = (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+const len3 = a => Math.hypot(a.x, a.y, a.z);
+const ang3 = (a, b) => Math.acos(clamp((a.x * b.x + a.y * b.y + a.z * b.z) / (len3(a) * len3(b) + 1e-9), -1, 1));
+function bendSum(l, ids) { let s = 0; for (let k = 1; k < ids.length - 1; k++) s += ang3(sub3(l[ids[k]], l[ids[k - 1]]), sub3(l[ids[k + 1]], l[ids[k]])); return s; }
+// 손가락 굽힘 원값 = 관절 꺾임 각의 합 + 손끝이 손목 쪽으로 접힌 정도(손바닥이 카메라를 볼 때 안정적인 신호)
+function rawCurls(l) {
+  const palm = len3(sub3(l[9], l[0])) + 1e-6, tipD = len3(sub3(l[4], l[5])) / palm;
+  const fold = tip => 1.5 * Math.max(0, 2 - len3(sub3(l[tip], l[0])) / palm);
+  return {
+    t: bendSum(l, [1, 2, 3, 4]) + Math.max(0, 1.1 - tipD) * 1.2,
+    i: bendSum(l, [0, 5, 6, 7, 8]) + fold(8),
+    m: (bendSum(l, [0, 9, 10, 11, 12]) + fold(12) + bendSum(l, [0, 13, 14, 15, 16]) + fold(16)) / 2,
+  };
+}
+// 손바닥(또는 손등) 면이 카메라를 얼마나 정면으로 보는가: 1 = 정면, 0 = 옆으로 선 손
+function palmFacing(l) { const a = sub3(l[5], l[0]), b = sub3(l[17], l[0]); const n = { x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x }; return Math.abs(n.z) / (len3(n) + 1e-9); }
+async function startCamera() {
+  const btn = $('btnCam'); btn.disabled = true; const chip = $('chipTrack');
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error('이 브라우저/주소에서는 카메라를 쓸 수 없습니다 (localhost 또는 https 필요)');
+    chip.textContent = '카메라 권한 요청 중…';
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false });
+    video.srcObject = stream; await video.play(); $('camPh').classList.add('hidden');
+    chip.textContent = '인식 모델 불러오는 중…';
+    if (!TRK.hand) {
+      const vision = await import(/* @vite-ignore */ `${TV}/vision_bundle.mjs`);
+      const fs = await vision.FilesetResolver.forVisionTasks(`${TV}/wasm`);
+      for (const delegate of ['GPU', 'CPU']) {
+        try { TRK.hand = await vision.HandLandmarker.createFromOptions(fs, { baseOptions: { modelAssetPath: HAND_URL, delegate }, runningMode: 'VIDEO', numHands: 1 }); break; }
+        catch (e) { if (delegate === 'CPU') throw e; }
+      }
+    }
+    S.cam.on = true; chip.textContent = '손 추적 준비 완료'; chip.classList.add('on');
+    btn.textContent = '⏹ 카메라 끄기'; btn.classList.remove('primary');
+    toast('📷 카메라 연결됨', 'ok', '손바닥을 카메라로 향하고 쥐었다 펴 보세요');
+  } catch (err) {
+    console.error(err); stopCamera(); chip.textContent = '카메라 사용 불가';
+    toast('카메라를 시작하지 못했습니다', 'bad', err.message || String(err));
+  }
+  btn.disabled = false;
+}
+function stopCamera() {
+  S.cam.on = false; setCamValid(false);
+  video.srcObject?.getTracks().forEach(t => t.stop()); video.srcObject = null; $('camPh').classList.remove('hidden');
+  overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
+  const btn = $('btnCam'); btn.textContent = '📷 카메라 시작'; btn.classList.add('primary');
+  const chip = $('chipTrack'); chip.classList.remove('on'); chip.textContent = '카메라 꺼짐';
+  $('trkMode').textContent = '꺼짐';
+}
+// 손을 놓쳤을 때는 마지막 손 모양을 슬라이더로 넘겨서, 들고 있던 물체를 갑자기 놓지 않게 한다
+function setCamValid(v) {
+  if (!v && S.cam.valid) { const c = S.cam.curls; S.grip = clamp((c.t + c.i + c.m) / 3, 0, 1); syncGripUI(); }
+  S.cam.valid = v;
+}
+function calibrateHand(kind) {
+  if (!S.cam.on) { toast('먼저 카메라를 시작하세요', 'warn'); return; }
+  let n = 3; const label = kind === 'open' ? '손바닥을 보이며 활짝 펴세요 ✋' : '주먹을 꽉 쥐세요 ✊';
+  toast(`${n}… ${label}`, 'warn');
+  const iv = setInterval(() => {
+    n--; if (n > 0) { toast(`${n}… ${label}`, 'warn'); return; }
+    clearInterval(iv); TRK.cal = { kind, samples: [], until: performance.now() + 600 };
+  }, 800);
+}
+function finishHandCal() {
+  const c = TRK.cal; TRK.cal = null;
+  if (c.samples.length < 3) { toast('손을 인식하지 못했습니다', 'bad', '손이 화면에 보이게 한 뒤 다시 시도하세요'); return; }
+  const m = { t: meanOf(c.samples.map(s => s.t)), i: meanOf(c.samples.map(s => s.i)), m: meanOf(c.samples.map(s => s.m)) };
+  CALIB = { ...CALIB, [c.kind]: m }; store.set('griplab.calib2', CALIB);
+  if (['t', 'i', 'm'].some(k => CALIB.fist[k] - CALIB.open[k] < 0.25)) toast('보정 값이 이상합니다', 'bad', '편 손과 주먹의 차이가 너무 작습니다. 반대쪽도 다시 보정하세요');
+  else toast((c.kind === 'open' ? '손 펴기' : '주먹') + ' 보정 완료', 'ok');
+}
+function trackStep() {
+  const now = performance.now();
+  if (TRK.cal && now > TRK.cal.until) finishHandCal();
+  if (video.readyState < 2 || video.currentTime === TRK.lastVT) { if (S.cam.valid && now - S.cam.lastSeen > 500) setCamValid(false); return; }
+  TRK.lastVT = video.currentTime;
+  let hr; try { hr = TRK.hand.detectForVideo(video, now); } catch (e) { return; }
+  const fdt = clamp((now - TRK.lastTs) / 1000, 1 / 120, 0.2); TRK.lastTs = now;
+  drawOverlay(hr);
+  if (!hr.worldLandmarks?.length) { if (S.cam.valid && now - S.cam.lastSeen > 400) setCamValid(false); $('trkMode').textContent = '손을 찾는 중…'; return; }
+  S.cam.lastSeen = now;
+  const hand = hr.worldLandmarks[0], facing = palmFacing(hand);
+  if (facing > 0.35) {                                    // 손이 옆으로 서 있으면 관절이 가려져 부정확 → 마지막 값을 유지
+    const raw = rawCurls(hand); TRK.raw = raw; if (TRK.cal) TRK.cal.samples.push(raw);
+    for (const k of ['t', 'i', 'm']) S.cam.curls[k] = TRK.f[k].f(clamp((raw[k] - CALIB.open[k]) / (CALIB.fist[k] - CALIB.open[k]), 0, 1), fdt);
+    $('trkMode').textContent = '손 추적 중';
+  } else $('trkMode').textContent = '손바닥을 카메라 쪽으로 향해 주세요';
+  if (!AUTO.running) setCamValid(true);
+}
+function drawOverlay(hr) {
+  const W = video.videoWidth, H = video.videoHeight; if (!W) return;
+  if (overlay.width !== W) { overlay.width = W; overlay.height = H; }
+  const c = overlay.getContext('2d'); c.clearRect(0, 0, W, H); c.lineCap = 'round';
+  for (const l of hr.landmarks || []) {
+    c.strokeStyle = '#ff7a2f'; c.lineWidth = 3;
+    for (const [a, b] of HAND_CONN) { c.beginPath(); c.moveTo(l[a].x * W, l[a].y * H); c.lineTo(l[b].x * W, l[b].y * H); c.stroke(); }
+    l.forEach((p, k) => { const tip = k % 4 === 0 && k > 0; c.fillStyle = tip ? '#3ddc97' : '#fff'; c.beginPath(); c.arc(p.x * W, p.y * H, tip ? 6 : 3, 0, 7); c.fill(); });
+  }
+}
+
+/* ============================================================ 학습: 시연 → 초깃값, CEM → 최적값 */
+const BOUNDS = [[Math.log(0.2), Math.log(FMAX)], [0.5, 4], [0, 0.15], [0, 0.12]], FLOOR = [0.02, 0.03, 0.003, 0.002];
+const vecToPol = v => ({ F: Math.exp(v[0]), T: v[1], clr: v[2], hRel: v[3] });
+function priorFromDemos(k) {
+  const d = DEMOS.filter(x => x.obj === k), ok = d.filter(x => x.outcome === 'success' && x.gripN > 0);
+  const sl = d.filter(x => x.outcome === 'slip' && x.gripN > 0), cr = d.filter(x => x.outcome === 'crush' && x.maxN > 0), db = d.filter(x => x.outcome === 'drop-break');
+  let lo = sl.length ? Math.max(...sl.map(x => x.gripN)) : null, hi = cr.length ? Math.min(...cr.map(x => x.maxN)) : null;
+  if (lo != null && hi != null && lo >= hi) lo = median(sl.map(x => x.gripN));
+  if (lo != null && hi != null && lo >= hi) lo = null;
+  const okN = ok.map(x => x.gripN);
+  let F = okN.length ? median(okN) : lo != null && hi != null ? Math.sqrt(lo * hi) : lo != null ? lo * 1.6 : hi != null ? hi * 0.5 : 8;
+  if (hi != null && F > hi * 0.9) F = hi * 0.8;
+  if (lo != null && F < lo * 1.1 && (hi == null || lo * 1.25 < hi)) F = lo * 1.25;
+  const sF = okN.length >= 3 ? clamp(stdOf(okN.map(Math.log)), 0.12, 0.6) : d.length ? 0.5 : 1.0;
+  const okT = ok.map(x => (x.carryTime - 0.5) / 1.65).filter(v => v > 0.2);
+  const T = okT.length ? clamp(median(okT), 0.5, 3.5) : 1.6, sT = okT.length >= 3 ? 0.35 : 0.8;
+  const clr = ok.length ? clamp(median(ok.map(x => x.liftClear)), 0.01, 0.12) : 0.05;
+  let hRel = ok.length ? clamp(median(ok.map(x => x.releaseH)), 0, 0.08) : 0.03;
+  if (db.length) hRel = Math.min(hRel, Math.min(...db.map(x => x.releaseH)) * 0.6);
+  const pres = d.map(x => x.pre).filter(v => v != null);
+  return {
+    n: d.length, nOk: ok.length, nSl: sl.length, nCr: cr.length, lo, hi,
+    mean: [Math.log(clamp(F, 0.25, FMAX)), T, clr, hRel], std: [sF, sT, 0.025, 0.015],
+    pre: pres.length ? clamp(median(pres), 0, 0.25) : 0.08, share: ok.length ? median(ok.map(x => x.share ?? 0.5)) : 0.5,
+  };
+}
+const SCEN_N = 32;
+const makeScen = n => Array.from({ length: n }, () => ({ g: randomGeom(), nz: noiseVec() }));
+function evalPolicy(p, o, scen) { let s = 0, ok = 0; for (const sc of scen) { const r = rollout(p, o, sc.g, sc.nz); s += r.score; if (r.outcome === 'success') ok++; } return { score: s / scen.length, succ: ok / scen.length }; }
+const LEARN = { running: false, key: null, queue: [], gen: 0, gens: 40, pop: 48, mean: null, std: null, hist: [], prior: null };
+function startLearn(keys) {
+  if (LEARN.running) return;
+  LEARN.queue = [...keys]; LEARN.gens = clamp(+$('learnGens').value || 40, 5, 200); LEARN.pop = clamp(+$('learnPop').value || 48, 12, 200);
+  nextLearn();
+}
+function nextLearn() {
+  const L = LEARN, k = L.queue.shift();
+  if (!k) { L.running = false; $('btnLearn').disabled = $('btnLearnAll').disabled = false; renderObjGrid(); return; }
+  L.key = k; L.prior = priorFromDemos(k); L.mean = [...L.prior.mean]; L.std = [...L.prior.std]; L.hist = []; L.gen = 0; L.running = true;
+  $('learnObj').value = k; $('btnLearn').disabled = $('btnLearnAll').disabled = true;
+}
+function learnTick() {
+  const L = LEARN, o = OBJ[L.key], scen = makeScen(SCEN_N), pop = [];   // 같은 세대의 후보는 같은 상황으로 공정하게 비교
+  for (let n = 0; n < L.pop; n++) {
+    const v = L.mean.map((m, j) => clamp(m + L.std[j] * randn(), BOUNDS[j][0], BOUNDS[j][1]));
+    pop.push({ v, ...evalPolicy(vecToPol(v), o, scen) });
+  }
+  pop.sort((a, b) => b.score - a.score);
+  const el = pop.slice(0, Math.max(4, Math.round(L.pop * 0.2)));
+  for (let j = 0; j < 4; j++) { const xs = el.map(e => e.v[j]); L.mean[j] = 0.7 * meanOf(xs) + 0.3 * L.mean[j]; L.std[j] = Math.max(0.7 * stdOf(xs) + 0.3 * L.std[j], FLOOR[j]); }
+  const ev = evalPolicy(vecToPol(L.mean), o, makeScen(100));
+  L.hist.push({ best: r2(pop[0].score), mean: r2(meanOf(pop.map(p => p.score))), succ: r3(ev.succ), score: r2(ev.score), F: r3(Math.exp(L.mean[0])), Fs: r3(L.std[0]) });
+  L.gen++;
+  $('learnProg').style.width = (100 * L.gen / L.gens) + '%';
+  $('learnStatus').textContent = `${o.name} — ${L.gen}/${L.gens}세대 · 누적 가상 시도 ${(L.gen * L.pop * SCEN_N).toLocaleString()}회 · 성공률 ${(ev.succ * 100).toFixed(0)}% · 힘 ${Math.exp(L.mean[0]).toFixed(2)} N`;
+  if (L.gen >= L.gens) {
+    const fin = evalPolicy(vecToPol(L.mean), o, makeScen(600));
+    POLICIES[L.key] = { ...vecToPol(L.mean), pre: L.prior.pre, share: L.prior.share, succ: fin.succ, score: fin.score, Fs: L.std[0], nDemos: L.prior.n, nOk: L.prior.nOk, lo: L.prior.lo, hi: L.prior.hi, hist: L.hist, at: Date.now() };
+    store.set('griplab.policies2', POLICIES);
+    toast(`🎓 ${o.name} 학습 완료`, 'ok', `최적 힘 ${POLICIES[L.key].F.toFixed(2)} N · 예상 성공률 ${(fin.succ * 100).toFixed(1)}%`);
+    nextLearn();
+  }
+  drawCurve(); drawForceWin(); renderPolicy();
+}
+function synthDemo(k) {
+  const o = OBJ[k], g = randomGeom(), need = o.mass * (G + 2) / (2 * o.mu);
+  const p = { F: clamp(need * Math.exp(0.5 + 0.6 * randn()), 0.2, FMAX), T: clamp(1.4 + 0.5 * randn(), 0.5, 4), clr: Math.abs(0.045 + 0.03 * randn()), hRel: Math.abs(0.02 + 0.025 * randn()) };
+  const r = rollout(p, o, g, noiseVec()), hc = cmdForForce(r.N, contactCurl(o.r)) / GR.cmdScale, j = () => r3(clamp(hc + 0.015 * randn(), 0, 1));
+  return {
+    id: Date.now() + '-' + Math.floor(Math.random() * 1e6), at: Date.now(), obj: k, src: 'synthetic', outcome: r.outcome,
+    gripN: r2(r.N), maxN: r2(r.N), peakAcc: 0, carryTime: r2(1.65 * p.T + 0.5), liftClear: r3(p.clr), releaseH: r3(p.hRel),
+    curls: { t: j(), i: j(), m: j() }, pre: r3(clamp(0.08 + 0.04 * randn(), 0, 0.25)), share: r2(clamp(0.5 + 0.05 * randn(), 0.3, 0.7)),
+    geom: { r: r2(g.r), dr: r2(g.dr), dth: r2(g.dth), barrierH: r3(g.barrierH), platH: g.platH },
+  };
+}
+
+/* ============================================================ UI */
+let toastTimer = 0;
+function toast(msg, cls = '', sub = '') {
+  const t = $('toast'); t.className = 'show ' + cls; t.innerHTML = msg + (sub ? `<small>${sub}</small>` : '');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+}
+function renderTaskCard() {
+  const T = S.task; if (!T) return; const o = T.o, need = o.mass * G / (2 * o.mu);
+  $('taskCard').innerHTML = `<h3>${o.ic} ${o.name}을(를) 초록 영역으로</h3>
+    <div class="props"><span>무게 <b>${Math.round(o.mass * 1000)} g</b></span><span>강도 <b>${fragility(o)}</b></span>
+    <span>목표 높이 <b>${(T.plat.h * 100).toFixed(0)} cm</b></span><span>장애물 <b>${T.barrier ? (T.barrier.h * 100).toFixed(0) + ' cm' : '없음'}</b></span></div>
+    ${S.settings.hint ? `<div class="hintline">힌트: 최소 약 ${need.toFixed(1)} N · ${o.breakF > FMAX ? '쥐어서는 안 깨짐' : '약 ' + o.breakF.toFixed(1) + ' N 넘으면 파손'}</div>` : ''}`;
+}
+function renderObjGrid() {
+  const cur = S.settings.fixed;
+  $('objGrid').innerHTML = OBJ_KEYS.map(k => { const o = OBJ[k]; return `<button data-k="${k}" class="${cur === k ? 'on' : ''}">${POLICIES[k] ? '<span class="dot"></span>' : ''}<span class="ic">${o.ic}</span>${o.name}<small>${fragility(o)}</small></button>`; }).join('')
+    + `<button data-k="random" class="${cur === 'random' ? 'on' : ''}"><span class="ic">🎲</span>무작위<small>매번 다른 물체</small></button>`;
+}
+const recLine = r => { const O = OUT[r.outcome], o = OBJ[r.obj]; return `<div class="it"><span>${O.ic}</span><span class="o">${o.ic} ${o.name} <span class="c-${O.cls}">${O.t}</span></span><span class="n">${(r.outcome === 'crush' ? r.maxN : r.gripN).toFixed(1)} N</span><span class="tag">${SRC[r.src]}</span></div>`; };
+function renderLog() { $('logList').innerHTML = LOG.slice(0, 14).map(recLine).join('') || '<div class="c-muted">아직 결과가 없습니다.</div>'; }
+function renderRobotList() {
+  $('robotList').innerHTML = ROBOTLOG.slice(0, 20).map(recLine).join('') || '<div class="c-muted">아직 기록이 없습니다.</div>';
+  const ok = ROBOTLOG.filter(r => r.outcome === 'success').length; $('robotRate').textContent = ROBOTLOG.length ? `성공 ${ok}/${ROBOTLOG.length}` : '';
+}
+function renderDemos() {
+  const rows = OBJ_KEYS.map(k => { const d = DEMOS.filter(x => x.obj === k), c = t => d.filter(x => t.includes(x.outcome)).length; return `<tr><td>${OBJ[k].ic} ${OBJ[k].name}</td><td>${d.length}</td><td class="c-ok">${c(['success'])}</td><td class="c-warn">${c(['slip'])}</td><td class="c-bad">${c(['crush', 'drop-break'])}</td></tr>`; });
+  $('demoStats').innerHTML = '<tr><th>물체</th><th>시연</th><th>성공</th><th>미끄러짐</th><th>파손</th></tr>' + rows.join('');
+  $('demoTotal').textContent = `총 ${DEMOS.length}건`;
+  $('demoList').innerHTML = DEMOS.slice(-25).reverse().map(recLine).join('') || '<div class="c-muted">저장된 시연이 없습니다.</div>';
+}
+function renderPolicy() {
+  const k = $('learnObj').value, p = POLICIES[k], o = OBJ[k], pr = priorFromDemos(k);
+  const head = `<tr><td>사용 가능한 시연</td><td>${pr.n}건 (성공 ${pr.nOk})</td></tr><tr><td>시연이 알려 준 힘 범위</td><td>${pr.lo != null ? pr.lo.toFixed(1) : '?'} ~ ${pr.hi != null ? pr.hi.toFixed(1) : '?'} N</td></tr>`;
+  if (!p) { $('polTable').innerHTML = head + `<tr><td colspan="2" class="c-muted">아직 학습하지 않았습니다.</td></tr>`; return; }
+  const hc = cmdForForce(p.F, contactCurl(o.r)) / GR.cmdScale;
+  $('polTable').innerHTML = head + `
+    <tr><td>목표 그립 힘</td><td class="c-ok">${p.F.toFixed(2)} N</td></tr>
+    <tr><td>사람 손가락 굽힘 환산</td><td>${(hc * 100).toFixed(0)}%</td></tr>
+    <tr><td>접근 손모양(미리 벌림)</td><td>굽힘 ${(p.pre * 100).toFixed(0)}%</td></tr>
+    <tr><td>엄지 힘 분담</td><td>${(p.share * 100).toFixed(0)}%</td></tr>
+    <tr><td>운반 시간</td><td>${p.T.toFixed(2)} s</td></tr>
+    <tr><td>장애물 위 여유</td><td>${(p.clr * 100).toFixed(1)} cm</td></tr>
+    <tr><td>놓는 높이</td><td>${(p.hRel * 100).toFixed(1)} cm</td></tr>
+    <tr><td>예상 성공률</td><td class="c-ok">${(p.succ * 100).toFixed(1)}%</td></tr>`;
+}
+function setupCanvas(cv) { const r = cv.getBoundingClientRect(), d = devicePixelRatio || 1; if (r.width < 2) return null; cv.width = r.width * d; cv.height = r.height * d; const ctx = cv.getContext('2d'); ctx.setTransform(d, 0, 0, d, 0, 0); ctx.font = '10px system-ui'; return { ctx, w: r.width, h: r.height }; }
+function drawCurve() {
+  const c = setupCanvas($('cvCurve')); if (!c) return; const { ctx, w, h } = c, k = $('learnObj').value;
+  const hist = LEARN.key === k && LEARN.hist.length ? LEARN.hist : POLICIES[k]?.hist || [];
+  const L = 30, R = 10, T = 10, B = 20, y0 = -100, y1 = 100, n = Math.max(hist.length, 10);
+  const X = i => L + (w - L - R) * (n > 1 ? i / (n - 1) : 0), Y = v => T + (h - T - B) * (1 - (clamp(v, y0, y1) - y0) / (y1 - y0));
+  ctx.strokeStyle = '#1f2a3b'; ctx.fillStyle = '#8597ad'; ctx.lineWidth = 1;
+  for (const v of [-100, -50, 0, 50, 100]) { ctx.beginPath(); ctx.moveTo(L, Y(v)); ctx.lineTo(w - R, Y(v)); ctx.stroke(); ctx.fillText(v, 8, Y(v) + 3); }
+  ctx.fillText('세대 →', w - 44, h - 5);
+  if (!hist.length) { ctx.fillText('학습을 실행하면 곡선이 그려집니다', L + 10, h / 2); return; }
+  const line = (f, col, dash = []) => { ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.setLineDash(dash); ctx.beginPath(); hist.forEach((p, i) => i ? ctx.lineTo(X(i), Y(f(p))) : ctx.moveTo(X(i), Y(f(p)))); ctx.stroke(); ctx.setLineDash([]); };
+  line(p => p.mean, '#5d6e86'); line(p => p.best, '#ff7a2f'); line(p => p.succ * 100, '#3ddc97', [5, 4]);
+  let lx = L + 6; for (const [t, col] of [['최고 점수', '#ff7a2f'], ['평균 점수', '#5d6e86'], ['성공률 %', '#3ddc97']]) { ctx.fillStyle = col; ctx.fillRect(lx, h - 12, 8, 3); ctx.fillStyle = '#8597ad'; ctx.fillText(t, lx + 11, h - 6); lx += ctx.measureText(t).width + 24; }
+}
+function drawForceWin() {
+  const c = setupCanvas($('cvWin')); if (!c) return; const { ctx, w, h } = c, k = $('learnObj').value, o = OBJ[k], pr = priorFromDemos(k), p = POLICIES[k];
+  const L = 56, R = 10, T = 12, B = 20, x0 = Math.log(0.3), x1 = Math.log(60);
+  const X = F => L + (w - L - R) * (Math.log(clamp(F, 0.3, 60)) - x0) / (x1 - x0);
+  const rows = [['성공', '#3ddc97', ['success']], ['미끄러짐', '#ffc24b', ['slip']], ['파손', '#ff5a6a', ['crush', 'drop-break']], ['기타', '#8597ad', ['miss', 'collision']]], rh = (h - T - B) / rows.length;
+  if (pr.lo != null || pr.hi != null) { ctx.fillStyle = 'rgba(76,195,255,.10)'; const a = X(pr.lo ?? 0.3), b = X(pr.hi ?? 60); ctx.fillRect(a, T, b - a, h - T - B); }
+  ctx.strokeStyle = '#1f2a3b'; ctx.fillStyle = '#8597ad';
+  for (const v of [0.5, 1, 2, 5, 10, 20, 45]) { ctx.beginPath(); ctx.moveTo(X(v), T); ctx.lineTo(X(v), h - B); ctx.stroke(); ctx.fillText(v, X(v) - 5, h - 7); }
+  ctx.fillText('N', w - 12, h - 7);
+  rows.forEach(([t, col], i) => { ctx.fillStyle = col; ctx.fillText(t, 6, T + rh * (i + 0.5) + 3); });
+  if (S.settings.hint) {
+    const dash = (F, col) => { ctx.strokeStyle = col; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(X(F), T); ctx.lineTo(X(F), h - B); ctx.stroke(); ctx.setLineDash([]); };
+    dash(o.mass * G / (2 * o.mu), '#4cc3ff'); if (o.breakF < 60) dash(o.breakF, '#ff5a6a');
+  }
+  DEMOS.filter(d => d.obj === k).slice(-400).forEach((d, n) => {
+    const i = rows.findIndex(r => r[2].includes(d.outcome)); if (i < 0) return; const F = d.outcome === 'crush' ? d.maxN : d.gripN; if (!(F > 0)) return;
+    const y = T + rh * (i + 0.2 + 0.6 * ((n * 0.618) % 1));
+    ctx.beginPath(); ctx.arc(X(F), y, 3, 0, 7);
+    if (d.src === 'synthetic') { ctx.strokeStyle = rows[i][1]; ctx.lineWidth = 1.2; ctx.stroke(); } else { ctx.fillStyle = rows[i][1]; ctx.fill(); }
+  });
+  const Fl = LEARN.running && LEARN.key === k ? Math.exp(LEARN.mean[0]) : p?.F;
+  if (Fl) { ctx.strokeStyle = '#3ddc97'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X(Fl), T - 4); ctx.lineTo(X(Fl), h - B); ctx.stroke(); ctx.fillStyle = '#3ddc97'; const tx = `학습 ${Fl.toFixed(2)} N`; ctx.fillText(tx, Math.min(X(Fl) + 4, w - ctx.measureText(tx).width - 4), T + 2); }
+  if (!DEMOS.some(d => d.obj === k)) { ctx.fillStyle = '#8597ad'; ctx.fillText('이 물체의 시연이 아직 없습니다 (●직접 ○가상)', L + 8, h / 2); }
+}
+function runCompare() {
+  const rows = OBJ_KEYS.map(k => {
+    const o = OBJ[k]; let a = 0, b = 0; const N = 300;
+    for (let n = 0; n < N; n++) { const g = randomGeom(), nz = noiseVec(); if (rollout(DEFAULT_POLICY, o, g, nz).outcome === 'success') a++; if (POLICIES[k] && rollout(POLICIES[k], o, g, nz).outcome === 'success') b++; }
+    const bar = (v, col) => `<span class="bar" style="width:${Math.round(v * 46)}px;background:${col}"></span>${(v * 100).toFixed(0)}%`;
+    return `<tr><td>${o.ic} ${o.name}</td><td>${bar(a / N, '#5d6e86')}</td><td>${POLICIES[k] ? bar(b / N, '#3ddc97') : '<span class="c-muted">미학습</span>'}</td></tr>`;
+  });
+  $('cmpTable').innerHTML = '<tr><th>물체</th><th>학습 전(기본값)</th><th>학습 후</th></tr>' + rows.join('');
+}
+const pct = F => Math.sqrt(clamp(F / FMAX, 0, 1)) * 100;
+$('gScale').innerHTML = [0, 1, 5, 10, 20, 45].map(v => `<span style="left:${pct(v)}%">${v}</span>`).join('');
+let hudN = 0;
+function updateHUD() {
+  const T = S.task, f = S.force, st = S.settings, os = S.obj;
+  $('gN').textContent = f.N.toFixed(1) + ' N';
+  const fill = $('gFill'); fill.style.width = pct(f.N) + '%';
+  let state = '대기', cls = '';
+  if (T) {
+    if (S.phase === 'done') { const O = OUT[S.lastOutcome]; state = O.t; cls = O.cls; }
+    else if (S.phase === 'released') state = '놓는 중';
+    else if (S.phase === 'carry') { state = '운반 중'; cls = 'ok'; }
+    else if (os.held) { if (f.N >= f.req) { state = '잡음 — 들어올리세요'; cls = 'ok'; } else { state = '접촉 — 힘 부족'; cls = 'warn'; } }
+    else if (S.aligned) state = S.align.ok ? '정렬됨 — 손가락을 오므리세요' : '손을 먼저 벌리세요';
+    else state = '물체에 접근하세요';
+    fill.style.background = !os.held ? '#5d6e86' : st.hint ? (f.N < f.req ? 'var(--warn)' : f.N > T.breakF * 0.85 ? 'var(--bad)' : 'var(--ok)') : 'var(--accent)';
+  }
+  const gs = $('gState'); gs.textContent = state; gs.className = 'state ' + cls;
+  const req = $('gReq'), brk = $('gBrk'), guide = $('gGuide'), pol = T && POLICIES[T.key];
+  req.classList.toggle('hidden', !(T && st.hint)); brk.classList.toggle('hidden', !(T && st.hint && T.o.breakF <= FMAX)); guide.classList.toggle('hidden', !(pol && st.guide));
+  if (T && st.hint) { req.style.left = pct(os.held ? f.req : T.o.mass * G / (2 * T.o.mu)) + '%'; brk.style.left = pct(T.o.breakF) + '%'; }
+  if (pol && st.guide) { guide.style.left = pct(pol.F * 0.9) + '%'; guide.style.width = (pct(pol.F * 1.12) - pct(pol.F * 0.9)) + '%'; }
+  $('fT').style.width = (f.t / FMAX_T * 100) + '%'; $('fI').style.width = (f.i / FMAX_F * 100) + '%'; $('fM').style.width = (f.m / FMAX_F * 100) + '%';
+  if (++hudN % 4) return;                                   // 아래는 가끔만 갱신
+  const mc = Math.max(robot.cmd.t, robot.cmd.i, robot.cmd.m) / GR.cmdScale;
+  $('gAcc').textContent = `가속 ${S.acc.length().toFixed(1)} m/s²`; $('gCurl').textContent = `손가락 굽힘 ${(clamp(mc, 0, 1) * 100).toFixed(0)}%`;
+  $('gLegend').innerHTML = (st.hint ? '<i style="background:var(--info)"></i>최소<i style="background:var(--bad)"></i>파손' : '') + (pol && st.guide ? '<i style="background:var(--ok)"></i>학습 최적' : '');
+  if (T) {
+    const from = os.lifted ? os.pos : robot.tcp, to = os.lifted ? T.plat : os.pos, a = cylOf(from.x, from.z), b = cylOf(to.x, to.z);
+    const dA = (b.yaw - a.yaw) * 180 / Math.PI, dR = (b.r - a.r) * 100, dH = os.lifted ? (os.pos.y - T.o.h / 2 - T.plat.h) * 100 : S.vd * 100;
+    const g = ok => ok ? 'good' : '';
+    $('alignInfo').innerHTML = `${os.lifted ? '목표까지' : '물체까지'} 회전 <b class="${g(Math.abs(dA) < 2)}">${dA.toFixed(0)}°</b> · 거리 <b class="${g(Math.abs(dR) < 1.5)}">${dR.toFixed(1)} cm</b> · ${os.lifted ? '바닥 간격' : '높이 차'} <b class="${g(os.lifted ? dH >= 0 && dH < 3 : Math.abs(S.vd) < T.o.h * 0.35)}">${dH.toFixed(1)} cm</b>`;
+  }
+  const ci = $('chipInput'); ci.className = 'chip' + (AUTO.running ? ' auto' : S.cam.valid ? ' on' : '');
+  ci.textContent = '입력: ' + (AUTO.running ? '로봇 자동' : `${TILT.on ? '기울기' : '방향키'} + ${S.cam.valid ? '카메라 손' : '수동 그립'}`);
+  const cu = S.cam.valid ? S.cam.curls : { t: S.grip, i: S.grip, m: S.grip };
+  for (const [k, id] of [['t', 'cT'], ['i', 'cI'], ['m', 'cM']]) { $(id).style.width = (cu[k] * 100) + '%'; $(id + 'v').textContent = Math.round(cu[k] * 100) + '%'; }
+  const q = robot.q, deg = v => (v * 180 / Math.PI).toFixed(0) + '°';
+  $('roYaw').textContent = deg(q.yaw); $('roSh').textContent = deg(q.q1); $('roEl').textContent = deg(q.q2);
+}
+
+/* ---------- 이벤트 연결 */
+$('btnCam').onclick = () => S.cam.on ? stopCamera() : startCamera();
+$('btnHelp').onclick = () => $('helpModal').classList.remove('hidden');
+$('btnHelpClose').onclick = () => $('helpModal').classList.add('hidden');
+$('helpModal').onclick = e => { if (e.target.id === 'helpModal') e.target.classList.add('hidden'); };
+document.querySelectorAll('.viewbtns button').forEach(b => b.onclick = () => setView(b.dataset.view));
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.id === 'tab-' + b.dataset.tab));
+  if (b.dataset.tab === 'learn') { drawCurve(); drawForceWin(); renderPolicy(); } if (b.dataset.tab === 'demo') renderDemos();
+});
+$('objGrid').onclick = e => { const b = e.target.closest('button'); if (!b) return; S.settings.fixed = b.dataset.k; saveSettings(); if (b.dataset.k !== 'random') $('learnObj').value = b.dataset.k; newTask(); };
+$('btnNew').onclick = () => newTask(); $('btnRetry').onclick = () => newTask(null, true);
+$('gripSlider').oninput = e => { S.grip = +e.target.value; $('gripVal').textContent = Math.round(S.grip * 100) + '%'; };
+const bindCheck = (id, k, fn) => { const el = $(id); el.checked = S.settings[k]; el.onchange = () => { S.settings[k] = el.checked; saveSettings(); fn?.(); }; };
+bindCheck('setHint', 'hint', () => { renderTaskCard(); drawForceWin(); }); bindCheck('setGuide', 'guide'); bindCheck('setSave', 'saveDemos'); bindCheck('setNext', 'autoNext');
+$('btnTilt').onclick = toggleTilt;
+// 터치 기기: 화면 버튼(누르고 있는 동안 해당 키를 누른 것과 같다) + 기울기 센서 버튼
+if (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window || location.search.includes('touch')) { $('touchPad').classList.remove('hidden'); $('btnTilt').classList.remove('hidden'); }
+document.querySelectorAll('#touchPad button').forEach(b => {
+  const k = b.dataset.key, up = () => { KEYS.delete(k); b.classList.remove('down'); };
+  b.onpointerdown = e => { e.preventDefault(); KEYS.add(k); b.classList.add('down'); b.setPointerCapture?.(e.pointerId); };
+  b.onpointerup = b.onpointercancel = b.onlostpointercapture = up; b.oncontextmenu = e => e.preventDefault();
+});
+$('btnCalOpen').onclick = () => calibrateHand('open'); $('btnCalFist').onclick = () => calibrateHand('fist');
+$('learnObj').innerHTML = OBJ_KEYS.map(k => `<option value="${k}">${OBJ[k].ic} ${OBJ[k].name}</option>`).join('');
+$('learnObj').onchange = () => { drawCurve(); drawForceWin(); renderPolicy(); };
+$('btnLearn').onclick = () => startLearn([$('learnObj').value]); $('btnLearnAll').onclick = () => startLearn(OBJ_KEYS);
+const addSynth = keys => { for (const k of keys) for (let n = 0; n < 10; n++) DEMOS.push(synthDemo(k)); saveDemos(); renderDemos(); drawForceWin(); renderPolicy(); toast(`가상 시연 ${keys.length * 10}건 추가`, 'ok'); };
+$('btnSynth').onclick = () => addSynth([S.settings.fixed !== 'random' ? S.settings.fixed : (S.task?.key || $('learnObj').value)]);
+$('btnSynthAll').onclick = () => addSynth(OBJ_KEYS);
+$('btnExport').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify({ demos: DEMOS, policies: POLICIES }, null, 1)], { type: 'application/json' })); a.download = 'griplab-data.json'; a.click(); URL.revokeObjectURL(a.href); };
+$('btnImport').onclick = () => $('fileImport').click();
+$('fileImport').onchange = async e => {
+  try { const j = JSON.parse(await e.target.files[0].text()); const d = (j.demos || []).filter(x => OBJ[x.obj] && OUT[x.outcome]); DEMOS.push(...d); for (const k in j.policies || {}) if (OBJ[k]) POLICIES[k] = j.policies[k]; saveDemos(); store.set('griplab.policies2', POLICIES); renderDemos(); renderObjGrid(); toast(`시연 ${d.length}건을 가져왔습니다`, 'ok'); }
+  catch (err) { toast('파일을 읽지 못했습니다', 'bad'); } e.target.value = '';
+};
+$('btnClear').onclick = () => { if (!confirm('저장된 시연과 학습 결과를 모두 지울까요? 되돌릴 수 없습니다.')) return; DEMOS = []; POLICIES = {}; saveDemos(); store.set('griplab.policies2', POLICIES); renderDemos(); renderObjGrid(); renderPolicy(); drawCurve(); drawForceWin(); };
+$('btnAuto').onclick = () => { AUTO.loop = 0; startAuto(); }; $('btnAutoLoop').onclick = () => { AUTO.loop = 4; startAuto(); }; $('btnAutoStop').onclick = () => stopAuto();
+$('simSpeed').oninput = e => { S.simSpeed = +e.target.value; };
+$('btnCompare').onclick = runCompare;
+
+/* ============================================================ 메인 루프 */
+let lastT = performance.now(), fpsT = 0, fpsN = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const rdt = clamp((now - lastT) / 1000, 0, 0.05); lastT = now;
+  fpsT += rdt; fpsN++; if (fpsT > 0.5) { $('chipFps').textContent = Math.round(fpsN / fpsT) + ' fps'; fpsT = 0; fpsN = 0; }
+  if (S.cam.on) trackStep();
+  manualInput(rdt);
+  const total = rdt * (AUTO.running ? S.simSpeed : 1), steps = Math.max(1, Math.ceil(total / 0.017)), dt = total / steps;
+  for (let k = 0; k < steps && dt > 0; k++) {
+    S.simT += dt;
+    if (AUTO.running) autoStep(dt); else controlStep(dt);
+    constrainTCP(); physicsStep(dt);
+  }
+  robot.update(); particlesStep(rdt);
+  // 그리퍼 아래 표시
+  const tcp = robot.tcp, sh = Math.max(0, supportAt(tcp.x, tcp.z).h) + 0.002, lp = dropLine.geometry.attributes.position;
+  lp.setXYZ(0, tcp.x, tcp.y, tcp.z); lp.setXYZ(1, tcp.x, sh, tcp.z); lp.needsUpdate = true;
+  dropRing.position.set(tcp.x, sh, tcp.z); arcRing.scale.setScalar(Math.hypot(tcp.x, tcp.z));
+  dropRing.material.color.setHex(S.task && !S.obj.held && S.hd < alignTol(S.task.o) ? 0x3ddc97 : 0xffffff);
+  if (S.task && S.phase !== 'done') S.task.zoneMat.emissiveIntensity = 0.5 + 0.3 * Math.sin(now / 300);
+  if (LEARN.running) learnTick();
+  updateHUD(); controls.update(); renderer.render(scene, camera);
+}
+renderObjGrid(); renderLog(); renderDemos(); renderRobotList(); renderPolicy();
+newTask();
+requestAnimationFrame(frame);
+window.GRIPLAB = { S, robot, AUTO, LEARN, OBJ, get DEMOS() { return DEMOS; }, get POLICIES() { return POLICIES; }, newTask, startAuto, rollout, learnTick,
+  // 화면 없이 시뮬레이션만 빠르게 돌리는 검증용 함수
+  fast(sec, dt = 1 / 60) { for (let t = 0; t < sec; t += dt) { S.simT += dt; if (AUTO.running) autoStep(dt); else controlStep(dt); constrainTCP(); physicsStep(dt); } robot.update(); } };
+</script>
+</body>
+</html>
