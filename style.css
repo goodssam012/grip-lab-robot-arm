@@ -56,6 +56,10 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 400px}
 #alignInfo b{color:var(--text)}
 #alignInfo .good{color:var(--ok)}
 #autoBadge{padding:5px 14px;color:var(--info);font-weight:700}
+#touchWarn{top:52px;left:50%;transform:translateX(-50%);padding:9px 18px;border:2px solid var(--bad);color:#ffd9dd;font-weight:800;font-size:15px;text-align:center;white-space:nowrap;z-index:3;animation:warnPulse .5s ease-in-out infinite alternate}
+#touchWarn small{display:block;color:#ffb3ba;font-weight:500;font-size:12px;margin-top:2px}
+#view.touching::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;box-shadow:inset 0 0 70px rgba(255,90,106,.55)}
+@keyframes warnPulse{from{background:rgba(60,14,20,.9)}to{background:rgba(110,22,32,.92)}}
 
 #gauge{width:min(480px,calc(100% - 340px));min-width:300px;padding:10px 14px 9px}
 .gtop{display:flex;align-items:baseline;gap:10px}
@@ -160,7 +164,7 @@ kbd{background:#0a0e14;border:1px solid var(--line);border-bottom-width:2px;bord
 
 #touchPad{position:absolute;z-index:2;left:0;right:0;bottom:150px;display:flex;justify-content:space-between;align-items:flex-end;padding:0 10px;pointer-events:none}
 #touchPad .grp{display:grid;gap:6px;pointer-events:auto}
-#touchPad .grp{grid-template-columns:repeat(2,78px);grid-template-rows:48px}
+#touchPad .grp{grid-template-columns:repeat(2,78px);grid-auto-rows:44px}
 #touchPad button{background:rgba(14,20,29,.85);font-size:15px;padding:0;touch-action:none;user-select:none;-webkit-user-select:none}
 #touchPad button.down{background:var(--accent);border-color:var(--accent);color:#1a0d04}
 
@@ -176,6 +180,7 @@ kbd{background:#0a0e14;border:1px solid var(--line);border-bottom-width:2px;bord
   .fingers,.gmeta{display:none}
   #gauge{padding:7px 12px 4px}
   #touchPad{bottom:96px}
+  #touchWarn{top:88px;font-size:13px;white-space:normal;width:calc(100% - 24px)}
   main{grid-template-columns:1fr;grid-template-rows:62vh auto}
   body{overflow:auto}
   #panel{border-left:0;border-top:1px solid var(--line);overflow:visible}
