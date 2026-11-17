@@ -41,6 +41,7 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 400px}
 #taskCard .hintline{margin-top:6px;color:var(--info);font-size:12px}
 .viewbtns{display:flex;gap:4px}
 .viewbtns button{padding:4px 9px;font-size:12px;background:rgba(14,20,29,.82)}
+.viewbtns button.on{border-color:var(--accent);color:var(--accent)}
 #alignInfo{padding:6px 10px;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 #alignInfo b{color:var(--text)}
 #alignInfo .good{color:var(--ok)}
