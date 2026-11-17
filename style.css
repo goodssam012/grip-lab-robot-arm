@@ -59,7 +59,7 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 400px}
 .band{position:absolute;top:0;bottom:0;background:rgba(61,220,151,.28);border-left:1px solid var(--ok);border-right:1px solid var(--ok)}
 .gscale{position:relative;height:14px;font-size:10px;color:var(--muted)}
 .gscale span{position:absolute;transform:translateX(-50%)}
-.fingers{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:2px}
+.fingers{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:2px}
 .fingers label{font-size:11px;color:var(--muted)}
 .fingers i{display:block;height:5px;background:#0a0e14;border-radius:3px;overflow:hidden}
 .fingers i b{display:block;height:100%;width:0;background:var(--info)}
