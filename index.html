@@ -87,9 +87,9 @@
         <button id="btnCal">🖐 손 보정 다시 하기 (4단계)</button>
       </div>
       <div class="readouts">
-        <div class="ro"><span>몸통 회전</span><b id="roYaw">–</b></div>
-        <div class="ro"><span>어깨 관절</span><b id="roSh">–</b></div>
-        <div class="ro"><span>팔꿈치 관절</span><b id="roEl">–</b></div>
+        <div class="ro"><span>팔 회전각</span><b id="roYaw">–</b></div>
+        <div class="ro"><span>회전 속도</span><b id="roSh">–</b></div>
+        <div class="ro"><span>닿은 손가락</span><b id="roEl">–</b></div>
       </div>
     </div>
 
@@ -257,6 +257,7 @@
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 /* ============================================================ 유틸 */
 const $ = id => document.getElementById(id);
@@ -289,13 +290,13 @@ class OneEuro {
 // r: 쥐는 반지름(m), h: 높이(m), mass(kg), mu: 마찰계수, breakF: 파손 힘(N), dropV: 파손 충돌 속도(m/s)
 const OBJ = {
   egg:   { name: '달걀',       ic: '🥚', shape: 'egg',    r: 0.028, h: 0.075, mass: 0.06,  mu: 0.35, breakF: 5,   dropV: 0.9, color: 0xf2e2c4 },
-  tofu:  { name: '두부',       ic: '⬜', shape: 'box',    r: 0.035, h: 0.06,  mass: 0.15,  mu: 0.30, breakF: 4.2, dropV: 0.7, color: 0xf7f4ea },
+  tofu:  { name: '두부',       ic: '⬜', shape: 'box',    r: 0.035, h: 0.07,  mass: 0.15,  mu: 0.30, breakF: 4.2, dropV: 0.7, color: 0xf7f4ea },
   bulb:  { name: '전구',       ic: '💡', shape: 'bulb',   r: 0.03,  h: 0.1,   mass: 0.04,  mu: 0.25, breakF: 3.5, dropV: 1.0, color: 0xfff6d8 },
   paper: { name: '종이컵(물)', ic: '🥤', shape: 'cup',    r: 0.036, h: 0.09,  mass: 0.18,  mu: 0.50, breakF: 5.5, dropV: 0.8, color: 0xf4f6fa },
   glass: { name: '유리컵',     ic: '🥛', shape: 'glass',  r: 0.035, h: 0.11,  mass: 0.25,  mu: 0.40, breakF: 20,  dropV: 1.2, color: 0x9fd8ff },
   apple: { name: '사과',       ic: '🍎', shape: 'sphere', r: 0.04,  h: 0.08,  mass: 0.2,   mu: 0.45, breakF: 35,  dropV: 2.2, color: 0xd9342b },
   ball:  { name: '테니스공',   ic: '🎾', shape: 'sphere', r: 0.033, h: 0.066, mass: 0.058, mu: 0.70, breakF: 200, dropV: 99,  color: 0xcfe23a },
-  iron:  { name: '쇠 블록',    ic: '🧱', shape: 'box',    r: 0.03,  h: 0.06,  mass: 1.0,   mu: 0.30, breakF: 400, dropV: 99,  color: 0x8b95a3 },
+  iron:  { name: '쇠 블록',    ic: '🧱', shape: 'box',    r: 0.03,  h: 0.07,  mass: 1.0,   mu: 0.30, breakF: 400, dropV: 99,  color: 0x8b95a3 },
 };
 const OBJ_KEYS = Object.keys(OBJ);
 const fragility = o => o.breakF < 6 ? '매우 약함' : o.breakF < 25 ? '약함' : o.breakF < 100 ? '보통' : '단단함';
@@ -383,10 +384,10 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e131b); scene.fog = new THREE.Fog(0x0e131b, 3.5, 9);
 const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 50);
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.55; controls.minDistance = 0.4; controls.maxDistance = 4;
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.49; controls.minDistance = 0.4; controls.maxDistance = 4;
 const VIEWS = {
-  front: [[0, 1.05, 1.9], [0, 0.2, 0.3]], side: [[1.55, 0.7, 0.42], [0, 0.12, 0.38]],
-  top: [[0, 1.9, 0.62], [0, 0, 0.38]], back: [[0, 0.95, -0.95], [0, 0.1, 0.42]],
+  front: [[0, 0.72, 1.4], [0, 0.07, 0.3]], side: [[1.25, 0.5, 0.42], [0, 0.07, 0.34]],
+  top: [[0, 1.55, 0.52], [0, 0, 0.34]], back: [[0, 0.75, -0.8], [0, 0.07, 0.4]],
 };
 function setView(k) { const [p, t] = VIEWS[k]; camera.position.set(...p); controls.target.set(...t); controls.update(); }
 setView('front');
@@ -409,62 +410,101 @@ const mk = (geo, mat, shadow = true) => { const m = new THREE.Mesh(geo, mat); m.
   const floor = mk(new THREE.PlaneGeometry(14, 14), new THREE.MeshStandardMaterial({ color: 0x0b0f15, roughness: 1 }), false); floor.rotation.x = -Math.PI / 2; floor.position.y = TABLE.floor; scene.add(floor);
 }
 
-/* ---------- 로봇팔 */
+/* ---------- 로봇: 수평으로 도는 회전 암 + 사람 손 모양 그리퍼 */
+// 손 좌표계: z = 앞(물체 쪽), x = 옆, y = 위. 물체 중심(TCP)은 z = ARM.LT 에 온다.
+const HAND = {
+  zK: 0.145, B: 0.048,                                    // 손가락 뿌리 관절의 앞쪽 위치, 중심축에서 옆으로 떨어진 거리
+  fingers: {                                              // y: 높이, L: 마디 길이(첫·중간·끝), r: 굵기
+    t: { y: 0.012, L: [0.038, 0.032], r: 0.0105 },
+    i: { y: 0.027, L: [0.040, 0.024, 0.020], r: 0.0085 },
+    m: { y: 0.009, L: [0.044, 0.027, 0.021], r: 0.0090 },
+    r: { y: -0.009, L: [0.041, 0.025, 0.020], r: 0.0085 },
+    p: { y: -0.027, L: [0.032, 0.019, 0.018], r: 0.0075 },
+  },
+};
+// 굽힘 v(0~1)일 때 각 관절의 각도 — 맞은편 손가락 쪽으로 굽는 방향이 +
+function jointAngles(k, v) { return k === 't' ? [lerp(-0.2, 0.85, v), lerp(0.05, 1.15, v)] : [lerp(-0.12, 1.1, v), lerp(0.06, 1.5, v), lerp(0.04, 0.9, v)]; }
+// 손가락이 물체(위에서 본 반지름 R 의 원)를 감싸 쥐는 관절 각도: 뿌리 마디부터 차례로, 닿을 때까지 굽힌다
+function wrapAngles(k, R) {
+  const f = HAND.fingers[k], lim = R + f.r * 0.9, open = jointAngles(k, 0), fist = jointAngles(k, 1), an = [];
+  let x = -HAND.B, z = HAND.zK - ARM.LT, phi = 0;         // 물체 중심을 원점으로, x 는 맞은편 쪽이 +
+  for (let j = 0; j < f.L.length; j++) {
+    let best = open[j];
+    for (let s = 0; s <= 1.0001; s += 0.02) {
+      const a = lerp(open[j], fist[j], s), sx = Math.sin(phi + a), cz = Math.cos(phi + a); let hit = false;
+      for (let q = 1; q <= 4 && !hit; q++) { const px = x + f.L[j] * sx * q / 4, pz = z + f.L[j] * cz * q / 4; hit = Math.hypot(px, pz) < lim || px > -0.002; }
+      if (hit) break; best = a;
+    }
+    an.push(best); phi += best; x += f.L[j] * Math.sin(phi); z += f.L[j] * Math.cos(phi);
+  }
+  return an;
+}
+// 물체 중심에서 높이 y 인 곳의 반지름(손가락마다 닿는 높이가 다르다)
+function radiusAt(o, y) {
+  if (o.shape === 'sphere' || o.shape === 'egg') return o.r * Math.sqrt(Math.max(0.05, 1 - (y / (o.h / 2)) ** 2));
+  if (o.shape === 'bulb') { const d = y - (o.h / 2 - o.r); return Math.abs(d) < o.r ? Math.max(o.r * 0.45, o.r * Math.sqrt(1 - (d / o.r) ** 2)) : o.r * 0.45; }
+  return o.shape === 'box' ? o.r * 1.1 : o.r;
+}
+const SKIN = new THREE.Color(0xe7b99d), PRESS = new THREE.Color(0xf0604e);
 class Robot {
   constructor() {
     const white = new THREE.MeshStandardMaterial({ color: 0xe9edf3, metalness: 0.25, roughness: 0.42 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x37404e, metalness: 0.6, roughness: 0.35 });
     const accent = new THREE.MeshStandardMaterial({ color: 0xff7a2f, metalness: 0.2, roughness: 0.45 });
-    const cyl = (r1, r2, h, m) => mk(new THREE.CylinderGeometry(r1, r2, h, 36), m);
-    const cap = (r, len, m) => { const c = mk(new THREE.CapsuleGeometry(r, Math.max(0.001, len - 2 * r), 8, 20), m); c.rotation.x = Math.PI / 2; c.position.z = len / 2; return c; };
+    const skin = new THREE.MeshStandardMaterial({ color: SKIN, roughness: 0.62 });
+    const nail = new THREE.MeshStandardMaterial({ color: 0xf8e2d8, roughness: 0.22 });
+    const cyl = (r1, r2, h, m) => mk(new THREE.CylinderGeometry(r1, r2, h, 40), m);
+    const cap = (r, len, m) => { const c = mk(new THREE.CapsuleGeometry(r, Math.max(0.001, len), 8, 18), m); c.rotation.x = Math.PI / 2; c.position.z = len / 2; return c; };   // z 축을 따라 0 → len
+    const seg = (a, b, r, m) => { const d = b.clone().sub(a), c = mk(new THREE.CapsuleGeometry(r, d.length(), 8, 18), m); c.position.copy(a).addScaledVector(d, 0.5); c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); return c; };
+    const rbox = (w, h, d, r, m) => mk(new RoundedBoxGeometry(w, h, d, 5, r), m);
     this.tcp = new THREE.Vector3(0, PLANE_Y, RING_R);
     this.cmd = five(0); this.contact = null; this.force = five(0);
+    this.cC = 0.3; this.wrap = Object.fromEntries(FK.map(k => [k, jointAngles(k, 0.5)]));   // 물리 모델의 접촉 굽힘, 손가락별 '감싸 쥔' 관절 각도
     const root = new THREE.Group(); scene.add(root);
-    const base = cyl(0.1, 0.11, 0.06, dark); base.position.y = 0.03; root.add(base);
+    // 고정 받침 기둥
+    const plate = cyl(0.11, 0.12, 0.02, dark); plate.position.y = 0.01; root.add(plate);
+    const col = cyl(0.05, 0.062, PLANE_Y - 0.055, white); col.position.y = 0.02 + (PLANE_Y - 0.055) / 2; root.add(col);
+    // 회전부: 허브 + 수평 암 (관절 없이 좌우로만 돈다)
     this.yawG = new THREE.Group(); root.add(this.yawG);
-    const tur = cyl(0.072, 0.09, 0.24, white); tur.position.y = 0.18; this.yawG.add(tur);
-    this.shG = new THREE.Group(); this.shG.position.y = ARM.SH_Y; this.yawG.add(this.shG);
-    const shJ = cyl(0.062, 0.062, 0.16, accent); shJ.rotation.z = Math.PI / 2; this.shG.add(shJ);
-    this.shG.add(cap(0.042, ARM.L1, white));
-    this.elG = new THREE.Group(); this.elG.position.z = ARM.L1; this.shG.add(this.elG);
-    const elJ = cyl(0.05, 0.05, 0.13, accent); elJ.rotation.z = Math.PI / 2; this.elG.add(elJ);
-    this.elG.add(cap(0.034, ARM.L2, white));
-    this.wrG = new THREE.Group(); this.wrG.position.z = ARM.L2; this.elG.add(this.wrG);
-    const wrJ = cyl(0.03, 0.03, 0.09, dark); wrJ.rotation.z = Math.PI / 2; this.wrG.add(wrJ);
-    this.rollG = new THREE.Group(); this.wrG.add(this.rollG);
-    const link = cyl(0.022, 0.022, 0.07, white); link.rotation.x = Math.PI / 2; link.position.z = 0.035; this.rollG.add(link);
-    const palm = mk(new THREE.BoxGeometry(0.086, 0.064, 0.034), dark); palm.position.z = 0.083; this.rollG.add(palm);   // 납작한 손바닥: 낮은 물체도 옆에서 잡는다
+    const hub = cyl(0.066, 0.066, 0.07, accent); hub.position.y = PLANE_Y; this.yawG.add(hub);
+    const lid = cyl(0.05, 0.058, 0.014, dark); lid.position.y = PLANE_Y + 0.042; this.yawG.add(lid);
+    const boomLen = RING_R - ARM.LT;
+    const boom = rbox(0.05, 0.046, boomLen, 0.012, white); boom.position.set(0, PLANE_Y, boomLen / 2); this.yawG.add(boom);
+    const stripe = rbox(0.052, 0.012, boomLen * 0.5, 0.005, dark); stripe.position.set(0, PLANE_Y, boomLen * 0.55); this.yawG.add(stripe);
+    // 손
+    const hand = new THREE.Group(); hand.position.set(0, PLANE_Y, boomLen); this.yawG.add(hand);
+    const cuff = cyl(0.031, 0.031, 0.03, dark); cuff.rotation.x = Math.PI / 2; cuff.position.z = 0.012; hand.add(cuff);
+    const ring = cyl(0.033, 0.033, 0.006, accent); ring.rotation.x = Math.PI / 2; ring.position.z = 0.03; hand.add(ring);
+    const wrist = cap(0.023, 0.05, skin); wrist.position.set(-0.012, 0, 0.03 + 0.025); wrist.scale.set(1, 1, 1.3); hand.add(wrist);   // 납작한 손목
+    const heel = rbox(0.086, 0.074, 0.04, 0.017, skin); heel.position.set(-0.0175, 0, 0.087); hand.add(heel);                     // 손바닥 아래쪽(물체 뒤)
+    const side = rbox(0.026, 0.074, 0.064, 0.012, skin); side.position.set(-HAND.B - 0.001, 0, 0.118); hand.add(side);            // 네 손가락이 붙는 손바닥 옆면
+    const ft = HAND.fingers.t;
+    hand.add(seg(new THREE.Vector3(0.0, 0.004, 0.088), new THREE.Vector3(HAND.B - 0.002, ft.y, HAND.zK - 0.006), 0.0145, skin));  // 엄지 두덩
     this.fingers = [];
-    // 사람 손처럼: 엄지 하나가 한쪽에, 네 손가락이 맞은편에 위아래로 나란히 서서 엄지를 향해 오므린다
-    for (const [k, az, oy] of [['t', 0, 0], ['i', Math.PI, 0.0225], ['m', Math.PI, 0.0075], ['r', Math.PI, -0.0075], ['p', Math.PI, -0.0225]]) {
-      const fr = k === 't' ? 0.0095 : 0.0066;             // 손가락 굵기
-      const rootG = new THREE.Group(); rootG.rotation.z = az; rootG.position.y = oy; this.rollG.add(rootG);
-      const hinge = new THREE.Group(); hinge.position.set(GR.base, 0, GR.palmZ); rootG.add(hinge);
-      const kn = mk(new THREE.SphereGeometry(fr * 1.25, 16, 12), accent); hinge.add(kn);
-      hinge.add(cap(fr, GR.L1, white));
-      const dist = new THREE.Group(); dist.position.z = GR.L1; hinge.add(dist);
-      dist.add(mk(new THREE.SphereGeometry(fr * 1.1, 16, 12), accent));
-      dist.add(cap(fr * 0.9, GR.L2, white));
-      const padMat = new THREE.MeshStandardMaterial({ color: 0x55606f, roughness: 0.8, emissive: 0x000000 });
-      const pad = mk(new THREE.SphereGeometry(fr * 1.1, 16, 12), padMat); pad.position.set(-0.003, 0, GR.L2 - 0.004); pad.scale.set(0.8, 1.1, 1.2); dist.add(pad);
-      this.fingers.push({ k, hinge, dist, padMat });
+    for (const k of FK) {
+      const f = HAND.fingers[k], thumb = k === 't', joints = [];
+      const rootG = new THREE.Group(); rootG.position.set(thumb ? HAND.B : -HAND.B, f.y, HAND.zK); rootG.rotation.z = thumb ? 0 : Math.PI; hand.add(rootG);   // 로컬 +x = 바깥쪽
+      const tipMat = skin.clone(); let parent = rootG;
+      f.L.forEach((len, j) => {
+        const g = new THREE.Group(); g.position.z = j ? f.L[j - 1] : 0; parent.add(g); parent = g; joints.push(g);
+        const last = j === f.L.length - 1, r = f.r * (1 - 0.07 * j);
+        g.add(mk(new THREE.SphereGeometry(r * 1.1, 16, 12), last ? tipMat : skin));                                              // 마디
+        g.add(cap(r, len - (last ? r : 0), last ? tipMat : skin));
+        if (last) { const n = mk(new THREE.SphereGeometry(r * 0.8, 14, 10), nail, false); n.scale.set(0.32, 1, 1.25); n.position.set(r * 0.78, 0, len * 0.6); g.add(n); }   // 손톱(바깥쪽)
+      });
+      this.fingers.push({ k, joints, tipMat, open: jointAngles(k, 0), fist: jointAngles(k, 1) });
     }
   }
+  setObject(o, cC) { this.cC = cC; for (const k of FK) this.wrap[k] = wrapAngles(k, radiusAt(o, HAND.fingers[k].y)); }
   update() {
-    // 그리퍼는 수평으로 바깥(몸통 반대쪽)을 향한다 → 손목은 TCP 에서 LT 만큼 몸통 쪽
-    const p = this.tcp, yaw = Math.atan2(p.x, p.z), rho = Math.hypot(p.x, p.z) - ARM.LT, h = p.y - ARM.SH_Y;
-    const d = clamp(Math.hypot(rho, h), Math.abs(ARM.L1 - ARM.L2) + 0.01, ARM.L1 + ARM.L2 - 0.001);
-    const q2 = Math.acos(clamp((d * d - ARM.L1 ** 2 - ARM.L2 ** 2) / (2 * ARM.L1 * ARM.L2), -1, 1));
-    const q1 = Math.atan2(h, rho) + Math.atan2(ARM.L2 * Math.sin(q2), ARM.L1 + ARM.L2 * Math.cos(q2));
-    const q3 = -(q1 - q2);
-    this.yawG.rotation.y = yaw; this.shG.rotation.x = -q1; this.elG.rotation.x = q2; this.wrG.rotation.x = -q3;
-    this.q = { yaw, q1, q2, q3 };
+    this.yawG.rotation.y = Math.atan2(this.tcp.x, this.tcp.z);
     for (const f of this.fingers) {
-      let c = Math.min(this.cmd[f.k], 1); if (this.contact != null) c = Math.min(c, this.contact);
-      const { a, b } = fingerAngles(c); f.hinge.rotation.y = a; f.dist.rotation.y = -b;
+      // 물리의 접촉 시점(cmd = cC)에 손가락이 정확히 물체 표면에 닿도록 그린다. 물체가 없으면 주먹까지 쥔다.
+      const cmd = this.cmd[f.k], w = this.wrap[f.k], cC = this.cC;
+      const u0 = cmd <= cC ? cmd / cC : this.contact != null ? 1 : 1 + clamp((cmd - cC) / (1.2 - cC), 0, 1);   // 0 편 손 → 1 감싸 쥠 → 2 주먹
+      f.joints.forEach((g, j) => { g.rotation.y = -(u0 <= 1 ? lerp(f.open[j], w[j], u0) : lerp(w[j], f.fist[j], u0 - 1)); });
       const u = clamp(this.force[f.k] / (f.k === 't' ? FMAX_T : FMAX_F), 0, 1);
-      if (u > 0) { f.padMat.color.setHSL(lerp(0.5, 0.02, Math.sqrt(u)), 0.9, 0.55); f.padMat.emissive.setHSL(lerp(0.5, 0.02, Math.sqrt(u)), 0.9, 0.18); }
-      else { f.padMat.color.setHex(0x55606f); f.padMat.emissive.setHex(0); }
+      f.tipMat.color.copy(SKIN).lerp(PRESS, Math.sqrt(u) * 0.85);                                                               // 세게 쥘수록 손끝이 붉어진다
     }
   }
 }
@@ -550,7 +590,7 @@ function newTask(k, same = false) {
   T.breakF = T.o.breakF * clamp(1 + 0.05 * randn(), 0.85, 1.15);
   T.dropV = T.o.dropV * clamp(1 + 0.05 * randn(), 0.85, 1.15);
   T.forceNoise = clamp(0.05 * randn(), -0.2, 0.2);
-  S.task = T;
+  S.task = T; robot.setObject(T.o, T.cC);
   // 장면 구성
   taskGroup.clear();
   const p = T.plat, zoneMat = new THREE.MeshStandardMaterial({ color: 0x1f8f62, emissive: 0x0f6f48, emissiveIntensity: 0.6, roughness: 0.7 });
@@ -1137,8 +1177,8 @@ function updateHUD() {
   ci.textContent = '입력: ' + (AUTO.running ? '로봇 자동' : `${TILT.on ? '기울기' : '방향키'} + ${S.cam.valid ? '카메라 손' : '수동 그립'}`);
   const cu = S.cam.valid ? S.cam.curls : five(S.grip);
   for (const [k, i5] of FBARS) { const id = 'c' + i5; $(id).style.width = (cu[k] * 100) + '%'; $(id + 'v').textContent = Math.round(cu[k] * 100) + '%'; }
-  const q = robot.q, deg = v => (v * 180 / Math.PI).toFixed(0) + '°';
-  $('roYaw').textContent = deg(q.yaw); $('roSh').textContent = deg(q.q1); $('roEl').textContent = deg(q.q2);
+  $('roYaw').textContent = (Math.atan2(robot.tcp.x, robot.tcp.z) * 180 / Math.PI).toFixed(0) + '°';
+  $('roSh').textContent = (S.vel.length() / RING_R * 180 / Math.PI).toFixed(0) + '°/s'; $('roEl').textContent = FK.filter(k => f[k] > 0.02).length + ' / 5';
 }
 
 /* ---------- 이벤트 연결 */
@@ -1210,7 +1250,7 @@ function frame(now) {
 renderObjGrid(); renderLog(); renderDemos(); renderRobotList(); renderPolicy();
 newTask();
 requestAnimationFrame(frame);
-window.GRIPLAB = { S, robot, AUTO, LEARN, OBJ, get DEMOS() { return DEMOS; }, get POLICIES() { return POLICIES; }, newTask, startAuto, rollout, learnTick, WIZ, calFeed, startCalWizard, get CALIB() { return CALIB; },
+window.GRIPLAB = { S, robot, AUTO, LEARN, OBJ, get DEMOS() { return DEMOS; }, get POLICIES() { return POLICIES; }, newTask, startAuto, rollout, learnTick, camera, controls, WIZ, calFeed, startCalWizard, get CALIB() { return CALIB; },
   // 화면 없이 시뮬레이션만 빠르게 돌리는 검증용 함수
   fast(sec, dt = 1 / 60) { for (let t = 0; t < sec; t += dt) { S.simT += dt; if (AUTO.running) autoStep(dt); else controlStep(dt); physicsStep(dt); } robot.update(); } };
 </script>
