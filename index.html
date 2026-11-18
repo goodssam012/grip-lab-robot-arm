@@ -87,17 +87,18 @@
 
   <aside id="panel">
     <div class="card">
-      <h4>카메라 · 손가락 관절 추적 <small id="trkMode">꺼짐</small></h4>
+      <h4>웹캠 · 손가락·팔 관절 추적 <small id="trkMode">꺼짐</small></h4>
       <div class="camwrap">
         <video id="video" playsinline muted></video>
         <canvas id="overlay"></canvas>
-        <div id="camPh">카메라가 꺼져 있습니다<small>손바닥을 카메라로 향하고 쥐었다 펴면<br>로봇 손이 따라 합니다</small></div>
+        <div id="camPh">카메라가 꺼져 있습니다<small>상반신과 한쪽 팔이 보이게 앉으면<br>손가락으로 쥐고, 팔로 로봇팔을 움직입니다</small></div>
         <div id="calBox" class="hidden">
-          <div class="top"><span id="calStep" class="chip on">1 / 4</span><button id="btnCalCancel">보정 취소</button></div>
+          <div class="top"><span id="calStep" class="chip on">1 / 6</span><span><button id="calSkip" class="hidden">팔 없이 계속</button> <button id="btnCalCancel">보정 취소</button></span></div>
           <div class="bot">
             <span id="calIc" class="ic">✋</span>
             <div><div id="calMsg" class="msg"></div><div id="calNote" class="note"></div></div>
             <span id="calCnt" class="cnt">3</span>
+            <div id="calChoice" class="hidden"><button data-hand="right">✋ 오른손 (기본)</button><button data-hand="left">🤚 왼손</button></div>
             <div class="prog"><b id="calProg"></b></div>
           </div>
         </div>
@@ -110,13 +111,26 @@
         <div class="row"><span>소지</span><i><b id="cP"></b></i><span id="cPv">0%</span></div>
       </div>
       <div class="btnrow">
-        <button id="btnCal">🖐 손 보정 다시 하기 (4단계)</button>
+        <button id="btnCal">🖐 전체 보정 다시 하기</button>
+        <button id="btnCalArm">💪 팔 기준만 다시</button>
       </div>
       <div class="readouts">
         <div class="ro"><span>팔 회전각</span><b id="roYaw">–</b></div>
         <div class="ro"><span>팔 접힘</span><b id="roSh">–</b></div>
         <div class="ro"><span>닿은 손가락</span><b id="roEl">–</b></div>
       </div>
+      <div id="armInfo" class="armInfo">팔 인식: 꺼짐</div>
+      <details>
+        <summary>웹캠 조종 설정</summary>
+        <div class="form">
+          <label>사용할 손</label><select id="setHand"><option value="right">오른손</option><option value="left">왼손</option></select>
+          <label>팔로 로봇 조종</label><input type="checkbox" id="setArmCam" style="justify-self:start">
+          <label>좌우(회전) 감도</label><input type="range" id="setCamYaw" min="0.4" max="2" step="0.05">
+          <label>팔 들기 감도</label><input type="range" id="setCamLift" min="0" max="2" step="0.05">
+          <label>어깨 당기기 감도</label><input type="range" id="setCamDepth" min="0" max="2" step="0.05">
+        </div>
+        <small>앞뒤(어깨 밀기·당기기)는 웹캠 한 대로 거리를 추정하므로 흔들릴 수 있습니다. 불편하면 감도를 0 으로 두고 팔 들기만 쓰세요.</small>
+      </details>
     </div>
 
     <nav class="tabs">
@@ -155,7 +169,7 @@
         <div class="keys">
           <span><kbd>←</kbd><kbd>→</kbd></span><span>팔 좌우 회전 (화면에서 보이는 방향 그대로)</span>
           <span><kbd>↑</kbd><kbd>↓</kbd></span><span>팔을 접어 올리기 / 펴서 내리기</span>
-          <span>✋ 카메라</span><span>손을 쥐면 잡고, 펴면 놓습니다</span>
+          <span>📷 웹캠</span><span>손가락을 쥐면 잡고 펴면 놓기 · 손을 몸 중심선 좌우로 옮기면 회전 · 팔을 들거나 어깨를 뒤로 당기면 팔 접기(내리거나 앞으로 밀면 펴기)</span>
           <span><kbd>X</kbd> / <kbd>Z</kbd></span><span>손가락 오므리기 / 펴기 (카메라 없을 때)</span>
           <span><kbd>Shift</kbd></span><span>누르고 있으면 정밀(느리게)</span>
           <span><kbd>N</kbd> / <kbd>Space</kbd></span><span>새 과제 / 자동 수행</span>
@@ -260,11 +274,11 @@
     <p>카메라로 찍은 <b>손가락 관절</b>의 쥐기·펴기로 가상 로봇 손을 움직이고, 그 시연을 학습시켜 로봇이 스스로 물체를 깨지 않고 옮기게 만드는 시뮬레이터입니다. 로봇 손은 <b>수평 방향</b>으로 탁자 위 물체를 옆에서 잡습니다.</p>
     <h3>1. 조작</h3>
     <ul>
-      <li><b>손 보정(처음 한 번)</b>: 카메라를 켜면 4단계 보정이 시작됩니다. ① 오른손 손바닥을 펴서 보여 주기 → ② 그대로 주먹 → ③ 손을 펴고 손가락 끝이 카메라(정면)를 향하게 → ④ 그대로 주먹. 이 네 자세를 기준으로 손이 어느 방향을 보든 쥐는 정도를 계산합니다.</li>
+      <li><b>보정(처음 한 번)</b>: 카메라를 켜면 ① 사용할 손 선택(오른손 기본, 왼손 가능) → ② 손바닥 펴기 → ③ 주먹 → ④ 손가락 끝이 정면을 향하게 펴기 → ⑤ 주먹 → ⑥ 팔 기준 자세(손을 가슴 높이, 몸 한가운데 앞에) 순서로 진행됩니다.</li>
       <li><b>손(카메라)</b>: 손을 움켜쥐면 로봇 손가락이 오므라들고, 펴면 벌어집니다. 다섯 손가락(엄지·검지·중지·약지·소지)이 로봇 손가락 다섯 개에 각각 전달됩니다.</li>
-      <li><b>팔</b>: 좌우 방향키 ←→ 로 수평 회전, 위아래 방향키 ↑↓ 로 팔을 접어 올리거나 펴서 내립니다. 스마트폰·태블릿은 「기울기 센서」를 켜고 좌우로 기울이면 회전, 앞뒤로 기울이면 접기/펴기입니다.</li>
+      <li><b>팔(웹캠)</b>: 손을 몸 중심선의 오른쪽·왼쪽으로 옮기면 로봇팔이 그쪽으로 회전합니다. 팔을 들어 올리거나 어깨를 뒤로 당기면 로봇팔이 위로 접히고, 내리거나 앞으로 밀면 펴져 내려갑니다. 팔이 화면에 안 보일 때는 키보드 ←→(회전), ↑↓(접기/펴기)를 씁니다.</li>
       <li><b>충돌</b>: 손은 물체를 통과하지 못합니다. 옆에서 밀고 들어가면 막히고 화면에 경고가 뜹니다. 팔을 접어 올려 물체 위로 넘어간 뒤 내려서 잡으세요.</li>
-      <li><b>순서</b>: 팔 접어 올리기 → 손을 편 채 물체 위로 회전 → 팔 내리기 → 쥐기 → 초록 받침으로 회전 → 펴기 → 팔 접어 올리기.</li>
+      <li><b>순서</b>: 손을 펴고 팔을 들어 로봇팔 접기 → 손을 물체 쪽으로 옮겨 회전 → 팔을 내려 펴기 → 손가락 쥐기 → 손을 초록 받침 쪽으로 옮기기 → 손 펴기 → 팔 들기.</li>
     </ul>
     <h3>2. 힘은 어떻게 정해지나</h3>
     <p>카메라는 힘을 직접 볼 수 없습니다. 그래서 로봇 손가락이 물체 표면에 닿은 뒤 <b>사람 손가락이 더 굽혀진 만큼</b>을 쥐는 힘으로 바꿉니다(스프링처럼). 조금 더 오므리면 약하게, 많이 오므리면 세게 쥡니다.</p>
@@ -394,12 +408,12 @@ const S = {
   obj: { pos: new THREE.Vector3(), vel: new THREE.Vector3(), off: new THREE.Vector3(), held: false, lifted: false, resting: true, broken: false, mesh: null },
   servo: { yaw: 0, vyaw: 0, lift: 0, vlift: 0 }, manual: { yaw: 0, lift: 0 }, grip: 0,   // yaw: 수평 회전각, lift: 팔이 위로 접힌 각도
   touchUntil: 0, touchWhat: '', touchN: 0,
-  cam: { on: false, valid: false, curls: five(0), lastSeen: 0 },
+  cam: { on: false, valid: false, arm: false, curls: five(0), lastSeen: 0, lat: 0, up: 0, back: 0 },
   vel: new THREE.Vector3(), acc: new THREE.Vector3(), prevTcp: null,
   force: { ...five(0), N: 0, req: 0 }, aligned: false, hd: 0, vd: 0,
   prevMaxCmd: 0, cmdRate: 0, slipT: 0, align: { track: false, ok: false },
   trial: null, lastOutcome: null,
-  settings: Object.assign({ hint: false, guide: true, autoNext: false, saveDemos: true, mirror: true, gain: 1, depth: 1, arm: 'right', fixed: 'random' }, store.get('griplab.settings', {})),
+  settings: Object.assign({ armCam: true, camYaw: 1, camLift: 1, camDepth: 0.8, hint: false, guide: true, autoNext: false, saveDemos: true, mirror: true, gain: 1, depth: 1, arm: 'right', fixed: 'random' }, store.get('griplab.settings', {})),
 };
 const saveSettings = () => store.set('griplab.settings', S.settings);
 
@@ -436,7 +450,7 @@ function setView(k) {
   VIEW.yaw = Math.atan2(robot.tcp.x, robot.tcp.z); const a = v.f ? VIEW.yaw : 0;
   camera.position.set(...v.p).applyAxisAngle(Y_AXIS, a); controls.target.set(...v.t).applyAxisAngle(Y_AXIS, a); controls.update();
   document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === k));
-  S.settings.view = k; saveSettings(); syncViewUI(true);
+  S.settings.view = k; saveSettings(); syncViewUI(true); camRebase();
 }
 // 세부 조절: 카메라를 '보는 점'을 중심으로 한 구면 좌표(거리 · 높이 각도 · 좌우 각도)로 읽고 쓴다
 const sph = new THREE.Spherical(), vOff = new THREE.Vector3(), DEG = Math.PI / 180;
@@ -964,11 +978,17 @@ function autoStep(dt) {
   robot.update(); noteTouch(handPenetration());
 }
 
-/* ============================================================ 카메라 추적 (MediaPipe 손 인식) */
+/* ============================================================ 카메라 추적 (MediaPipe: 손가락 + 팔·어깨 관절) */
 const TV = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
 const HAND_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task';
+const POSE_URL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 const video = $('video'), overlay = $('overlay');
-const TRK = { hand: null, lastVT: -1, lastTs: 0, w: 0, f: Object.fromEntries(FK.map(k => [k, new OneEuro(2, 0.8)])) };
+const TRK = {
+  hand: null, pose: null, lastVT: -1, lastTs: 0, w: 0, armSeen: 0, sign: -1, yawOff: 0,
+  f: Object.fromEntries(FK.map(k => [k, new OneEuro(2, 0.8)])),
+  a: { lat: new OneEuro(1.2, 0.6), up: new OneEuro(1.2, 0.6), back: new OneEuro(0.6, 0.3) },   // 팔 위치 신호 필터(앞뒤는 더 흔들려서 더 부드럽게)
+};
+const ARM_GAIN = { yaw: 1.9, lift: 1.4, back: 1.4 };       // 어깨너비 1 만큼 움직일 때의 회전각·접힘각(rad)
 const HAND_CONN = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
 const sub3 = (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
 const len3 = a => Math.hypot(a.x, a.y, a.z);
@@ -988,6 +1008,42 @@ function rawCurls(l) {
 }
 // 손이 카메라(정면)를 가리키는 정도: 0 = 손바닥을 보이며 세운 손, 1 = 손가락 끝이 카메라를 향한 손
 function pointing(l) { const d = sub3(l[9], l[0]); return Math.abs(d.z) / (len3(d) + 1e-9); }
+const handName = () => CALIB.hand === 'left' ? '왼손' : '오른손', armName = () => CALIB.hand === 'left' ? '왼팔' : '오른팔';
+// 포즈에서 고른 팔의 위치를 어깨너비 단위로 읽는다. lat: 몸 중심선 기준 오른쪽(+), up: 어깨보다 위(+), back: 어깨보다 뒤로 당김(+)
+function readPose(pr) {
+  const wl = pr?.worldLandmarks?.[0], il = pr?.landmarks?.[0]; if (!wl || !il) return null;
+  const id = CALIB.hand === 'left' ? { s: 11, e: 13, w: 15, o: 12 } : { s: 12, e: 14, w: 16, o: 11 };   // 사람 기준 오른쪽 어깨 12, 손목 16
+  const vis = k => (il[k].visibility ?? 1) > 0.5;
+  if (!vis(id.s) || !vis(id.o) || !vis(id.w)) return null;
+  const s = wl[id.s], o = wl[id.o], w = wl[id.w], sw = Math.max(0.15, Math.hypot(s.x - o.x, s.y - o.y, s.z - o.z));
+  // 좌우를 뒤집지 않은 웹캠 영상에서 사람의 오른쪽은 x 가 작은 쪽이다
+  return { id, il, sw, lat: ((s.x + o.x) / 2 - w.x) / sw, up: (s.y - w.y) / sw, back: (w.z - s.z) / sw, wristImg: il[id.w] };
+}
+// 고른 손(오른손/왼손)만 쓴다: 팔이 보이면 그 팔 손목에 가장 가까운 손, 안 보이면 손 이름표로 고른다
+function pickHand(hr, P) {
+  const L = hr?.landmarks || []; if (!L.length) return -1;
+  if (P) { let best = -1, bd = 0.2; L.forEach((l, k) => { const d = Math.hypot(l[0].x - P.wristImg.x, l[0].y - P.wristImg.y); if (d < bd) { bd = d; best = k; } }); if (best >= 0) return best; }
+  const want = CALIB.hand === 'left' ? 'Right' : 'Left';   // MediaPipe 는 거울 영상을 가정하므로, 뒤집지 않은 영상에서는 이름표가 반대로 나온다
+  const k = (hr.handednesses || hr.handedness || []).findIndex(h => h?.[0]?.categoryName === want);
+  return k >= 0 ? k : (!P && L.length === 1 ? 0 : -1);
+}
+const dz = (v, d = 0.04) => Math.sign(v) * Math.max(0, Math.abs(v) - d);   // 기준 자세 근처의 작은 떨림은 무시
+// 팔 → 로봇: 손을 몸 중심선 좌우로 옮기면 회전, 팔을 들거나 어깨를 뒤로 당기면 로봇팔이 위로 접힌다(내리거나 앞으로 밀면 펴진다)
+function armControl(P, dt) {
+  const c = CALIB.arm, st = S.settings, a = TRK.a;
+  const lat = a.lat.f(P.lat - c.lat, dt), up = a.up.f(P.up - c.up, dt), back = a.back.f(P.back - c.back, dt);
+  S.cam.lat = lat; S.cam.up = up; S.cam.back = back;
+  S.manual.yaw = TRK.yawOff + TRK.sign * ARM_GAIN.yaw * st.camYaw * lat;
+  S.manual.lift = ARM_GAIN.lift * st.camLift * dz(up) + ARM_GAIN.back * st.camDepth * dz(back);
+  clampCyl(S.manual);
+}
+// 시점을 바꿔 '화면 오른쪽'의 회전 방향이 뒤집히면, 팔이 튀지 않도록 기준을 다시 맞춘다
+function camRebase() {
+  if (!S.cam.on || !CALIB.arm) return;
+  camera.updateMatrixWorld(); const ns = screenSign(); if (ns === TRK.sign) return;
+  TRK.yawOff = S.manual.yaw - ns * ARM_GAIN.yaw * S.settings.camYaw * (S.cam.lat || 0); TRK.sign = ns;
+}
+function armReset() { TRK.yawOff = 0; camera.updateMatrixWorld(); TRK.sign = screenSign(); for (const k in TRK.a) TRK.a[k].reset(); }
 async function startCamera() {
   const btn = $('btnCam'); btn.disabled = true; const chip = $('chipTrack');
   try {
@@ -996,17 +1052,20 @@ async function startCamera() {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false });
     video.srcObject = stream; await video.play(); $('camPh').classList.add('hidden');
     chip.textContent = '인식 모델 불러오는 중…';
-    if (!TRK.hand) {
+    if (!TRK.hand || !TRK.pose) {
       const vision = await import(/* @vite-ignore */ `${TV}/vision_bundle.mjs`);
       const fs = await vision.FilesetResolver.forVisionTasks(`${TV}/wasm`);
-      for (const delegate of ['GPU', 'CPU']) {
-        try { TRK.hand = await vision.HandLandmarker.createFromOptions(fs, { baseOptions: { modelAssetPath: HAND_URL, delegate }, runningMode: 'VIDEO', numHands: 1 }); break; }
-        catch (e) { if (delegate === 'CPU') throw e; }
-      }
+      const make = async (Cls, url, extra) => {
+        for (const delegate of ['GPU', 'CPU']) { try { return await Cls.createFromOptions(fs, { baseOptions: { modelAssetPath: url, delegate }, runningMode: 'VIDEO', ...extra }); } catch (e) { if (delegate === 'CPU') throw e; } }
+      };
+      TRK.hand = TRK.hand || await make(vision.HandLandmarker, HAND_URL, { numHands: 2 });
+      try { TRK.pose = TRK.pose || await make(vision.PoseLandmarker, POSE_URL, { numPoses: 1 }); }
+      catch (e) { console.warn(e); toast('팔 인식 모델을 불러오지 못했습니다', 'warn', '손가락만 카메라로, 팔은 키보드로 조작합니다'); }
     }
-    S.cam.on = true; chip.textContent = '손 추적 준비 완료'; chip.classList.add('on');
+    S.cam.on = true; chip.textContent = '추적 준비 완료'; chip.classList.add('on');
     btn.textContent = '⏹ 카메라 끄기'; btn.classList.remove('primary');
-    if (CALIB.done) toast('📷 카메라 연결됨', 'ok', '손을 쥐었다 펴 보세요'); else startCalWizard();   // 처음이면 손 보정부터
+    if (CALIB.done && (CALIB.arm || !TRK.pose)) { armReset(); toast('📷 카메라 연결됨', 'ok', `${handName()}을 쥐었다 펴고, ${armName()}을 좌우·위아래로 움직여 보세요`); }
+    else startCalWizard(CALIB.done ? CAL_ARM : 0);          // 처음이면 손 선택부터, 손 보정만 되어 있으면 팔 기준만
   } catch (err) {
     console.error(err); stopCamera(); chip.textContent = '카메라 사용 불가';
     toast('카메라를 시작하지 못했습니다', 'bad', err.message || String(err));
@@ -1014,7 +1073,7 @@ async function startCamera() {
   btn.disabled = false;
 }
 function stopCamera() {
-  stopCalWizard(false); S.cam.on = false; setCamValid(false);
+  stopCalWizard(false); S.cam.on = false; S.cam.arm = false; setCamValid(false);
   video.srcObject?.getTracks().forEach(t => t.stop()); video.srcObject = null; $('camPh').classList.remove('hidden');
   overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
   const btn = $('btnCam'); btn.textContent = '📷 카메라 시작'; btn.classList.add('primary');
@@ -1026,81 +1085,122 @@ function setCamValid(v) {
   if (!v && S.cam.valid) { const c = S.cam.curls; S.grip = clamp(meanOf(FK.map(k => c[k])), 0, 1); syncGripUI(); }
   S.cam.valid = v;
 }
-/* ---------- 손 보정 4단계: 손바닥 자세(펴기 → 주먹) → 정면 자세(펴기 → 주먹) */
+/* ---------- 보정: 손 선택 → 손가락 4단계(손바닥 자세 펴기·주먹, 정면 자세 펴기·주먹) → 팔 기준 자세 */
 const CAL_STEPS = [
-  { pose: 'A', kind: 'open', ic: '✋', msg: '오른손 손바닥을 활짝 펴서 카메라에 보여 주세요' },
-  { pose: 'A', kind: 'fist', ic: '✊', msg: '그 자세 그대로 주먹을 쥐어 주세요' },
-  { pose: 'B', kind: 'open', ic: '🫱', msg: '손을 펴고, 손가락 끝이 카메라(정면)를 향하게 뻗어 주세요' },
-  { pose: 'B', kind: 'fist', ic: '👊', msg: '그 자세 그대로 주먹을 쥐어 주세요' },
+  { type: 'choose', ic: '🖐', msg: () => '어느 손으로 조종할까요?' },
+  { type: 'hand', pose: 'A', kind: 'open', ic: '✋', msg: () => `${handName()} 손바닥을 활짝 펴서 카메라에 보여 주세요` },
+  { type: 'hand', pose: 'A', kind: 'fist', ic: '✊', msg: () => '그 자세 그대로 주먹을 쥐어 주세요' },
+  { type: 'hand', pose: 'B', kind: 'open', ic: '🫱', msg: () => '손을 펴고, 손가락 끝이 카메라(정면)를 향하게 뻗어 주세요' },
+  { type: 'hand', pose: 'B', kind: 'fist', ic: '👊', msg: () => '그 자세 그대로 주먹을 쥐어 주세요' },
+  { type: 'arm', ic: '💪', msg: () => `${armName()} 기준 자세: 손을 가슴 높이, 몸 한가운데 앞에 편하게 두세요` },
 ];
-const WIZ = { on: false, step: 0, phase: 'count', t: 0, tries: 0, note: '', samples: [], data: null };
+const CAL_ARM = CAL_STEPS.length - 1, CAL_N = CAL_STEPS.length;
+const WIZ = { on: false, step: 0, phase: 'count', t: 0, lost: 0, tries: 0, note: '', samples: [], data: null };
 const CAL_COUNT = 2.4, CAL_HOLD = 0.8;                    // 준비 시간(3·2·1), 측정 시간(초)
-function startCalWizard() {
+function startCalWizard(from = 0) {
   if (!S.cam.on) { toast('먼저 카메라를 시작하세요', 'warn'); return; }
-  Object.assign(WIZ, { on: true, step: 0, phase: 'count', t: 0, tries: 0, note: '', samples: [], data: { A: {}, B: {} } });
+  if (from === CAL_ARM && !TRK.pose) { toast('팔 인식 모델이 없어 팔 기준을 잡을 수 없습니다', 'warn'); return; }
+  Object.assign(WIZ, { on: true, step: from, phase: from === 0 ? 'choose' : 'count', t: 0, lost: 0, tries: 0, note: '', samples: [], data: { A: { ...CALIB.A }, B: { ...CALIB.B } } });
   setCamValid(false); $('calBox').classList.remove('hidden');
   video.closest('.card').scrollIntoView({ block: 'nearest', behavior: 'smooth' }); renderWiz();
 }
 function stopCalWizard(cancelled) {
   if (!WIZ.on) return;
   WIZ.on = false; $('calBox').classList.add('hidden');
-  if (cancelled) toast('손 보정을 취소했습니다', 'warn', CALIB.done ? '이전 보정 값을 그대로 씁니다' : '기본값으로 동작합니다 · 정확도를 위해 보정을 권장합니다');
+  if (cancelled) toast('보정을 취소했습니다', 'warn', CALIB.done ? '이전 보정 값을 그대로 씁니다' : '기본값으로 동작합니다 · 정확도를 위해 보정을 권장합니다');
 }
-// 카메라 프레임마다 호출. sample = { t, i, m, r, p, dir } (손이 안 보이면 null)
-function calFeed(sample, dt) {
+function chooseHand(h) {
+  CALIB.hand = h; S.settings.hand = h; $('setHand').value = h; store.set('griplab.calib4', CALIB);
+  for (const k in TRK.f) TRK.f[k].reset();
+  if (WIZ.on && CAL_STEPS[WIZ.step].type === 'choose') { WIZ.step++; WIZ.phase = 'count'; WIZ.t = 0; renderWiz(); }
+}
+// 카메라 프레임마다 호출. sample = 손가락 값(손이 안 보이면 null), P = 팔 자세(안 보이면 null)
+function calFeed(sample, P, dt) {
   if (!WIZ.on) return;
-  if (WIZ.phase === 'count') {                            // 손이 보이는 동안만 3·2·1 이 진행된다
-    WIZ.t = sample ? WIZ.t + dt : Math.max(0, WIZ.t - dt);
+  const st = CAL_STEPS[WIZ.step], cur = st.type === 'arm' ? P : sample;
+  if (WIZ.phase === 'choose') { renderWiz(); return; }   // 손 선택 버튼을 기다린다
+  if (WIZ.phase === 'count') {                            // 손(팔)이 보이는 동안만 3·2·1 이 진행된다
+    WIZ.t = cur ? WIZ.t + dt : Math.max(0, WIZ.t - dt);
+    WIZ.lost = cur ? 0 : WIZ.lost + dt;
+    if (st.type === 'arm' && WIZ.lost > 3) WIZ.note = '어깨와 손목이 보이지 않습니다. 카메라에서 조금 떨어져 상반신이 보이게 앉으세요';
     if (WIZ.t >= CAL_COUNT) { WIZ.phase = 'capture'; WIZ.t = 0; WIZ.samples = []; }
   } else if (WIZ.phase === 'capture') {
-    WIZ.t += dt; if (sample) WIZ.samples.push(sample);
+    WIZ.t += dt; if (cur) WIZ.samples.push(cur);
     if (WIZ.t >= CAL_HOLD) calCapture();
   } else if ((WIZ.t += dt) >= 0.7) {                      // 'ok' 표시 후 다음 단계
-    if (++WIZ.step >= CAL_STEPS.length) { calFinish(); return; }
-    WIZ.phase = 'count'; WIZ.t = 0;
+    if (++WIZ.step >= CAL_N) { calFinish(); return; }
+    WIZ.phase = 'count'; WIZ.t = 0; WIZ.lost = 0;
   }
   renderWiz();
 }
 function calCapture() {
   const st = CAL_STEPS[WIZ.step], D = WIZ.data, n = WIZ.samples.length;
   const retry = why => { WIZ.phase = 'count'; WIZ.t = 0; WIZ.tries++; WIZ.note = why; };
-  if (n < 5) return retry('손이 잘 보이지 않았습니다. 다시 해 볼게요');
-  const m = {}; for (const k of [...FK, 'dir']) m[k] = meanOf(WIZ.samples.map(x => x[k]));
-  if (WIZ.tries < 2) {                                    // 두 번까지는 자세를 다시 요청하고, 그 뒤에는 받아들인다
-    if (st.kind === 'open' && m.i + m.m > 5) return retry('손가락이 굽어 보입니다. 손을 활짝 펴 주세요');
-    if (st.kind === 'fist' && (m.i - D[st.pose].open.i) + (m.m - D[st.pose].open.m) < 1.2) return retry('주먹이 인식되지 않았습니다. 손가락을 더 꽉 쥐어 주세요');
-    if (st.pose === 'B' && st.kind === 'open' && Math.abs(m.dir - D.A.dir) < 0.15) return retry('손바닥 자세와 비슷합니다. 손가락 끝이 카메라를 가리키게 해 주세요');
+  if (n < 5) return retry(st.type === 'arm' ? '팔이 잘 보이지 않았습니다. 다시 해 볼게요' : '손이 잘 보이지 않았습니다. 다시 해 볼게요');
+  if (st.type === 'arm') {
+    D.arm = { lat: meanOf(WIZ.samples.map(x => x.lat)), up: meanOf(WIZ.samples.map(x => x.up)), back: meanOf(WIZ.samples.map(x => x.back)) };
+  } else {
+    const m = {}; for (const k of [...FK, 'dir']) m[k] = meanOf(WIZ.samples.map(x => x[k]));
+    if (WIZ.tries < 2) {                                  // 두 번까지는 자세를 다시 요청하고, 그 뒤에는 받아들인다
+      if (st.kind === 'open' && m.i + m.m > 5) return retry('손가락이 굽어 보입니다. 손을 활짝 펴 주세요');
+      if (st.kind === 'fist' && (m.i - D[st.pose].open.i) + (m.m - D[st.pose].open.m) < 1.2) return retry('주먹이 인식되지 않았습니다. 손가락을 더 꽉 쥐어 주세요');
+      if (st.pose === 'B' && st.kind === 'open' && Math.abs(m.dir - D.A.dir) < 0.15) return retry('손바닥 자세와 비슷합니다. 손가락 끝이 카메라를 가리키게 해 주세요');
+    }
+    D[st.pose][st.kind] = Object.fromEntries(FK.map(k => [k, m[k]]));
+    D[st.pose].dir = st.kind === 'open' ? m.dir : (D[st.pose].dir + m.dir) / 2;
   }
-  D[st.pose][st.kind] = Object.fromEntries(FK.map(k => [k, m[k]]));
-  D[st.pose].dir = st.kind === 'open' ? m.dir : (D[st.pose].dir + m.dir) / 2;
   WIZ.phase = 'ok'; WIZ.t = 0; WIZ.tries = 0; WIZ.note = '';
 }
 function calFinish() {
   const D = WIZ.data;
   for (const P of ['A', 'B']) for (const k of FK)      // 편 손과 주먹의 차이가 너무 작으면 기본 폭으로 보완
     if (D[P].fist[k] - D[P].open[k] < 0.25) D[P].fist[k] = D[P].open[k] + (CAL_DEF.A.fist[k] - CAL_DEF.A.open[k]) * 0.6;
-  CALIB = { A: D.A, B: D.B, done: true }; store.set('griplab.calib4', CALIB);
-  WIZ.on = false; $('calBox').classList.add('hidden'); TRK.w = 0;
-  toast('🖐 손 보정 완료', 'ok', '이제 손을 쥐었다 펴면 로봇 손이 따라 합니다');
+  CALIB = { A: D.A, B: D.B, done: true, hand: CALIB.hand || 'right', arm: D.arm || CALIB.arm || null }; store.set('griplab.calib4', CALIB);
+  WIZ.on = false; $('calBox').classList.add('hidden'); TRK.w = 0; armReset();
+  toast('🖐 보정 완료', 'ok', CALIB.arm ? `손을 쥐면 잡고 · ${armName()}을 좌우로 옮기면 회전 · 들거나 어깨를 당기면 팔이 접힙니다` : '손을 쥐었다 펴면 로봇 손이 따라 합니다 · 팔은 키보드로 조작하세요');
+}
+function skipArmStep() {                                  // 팔이 안 보일 때: 팔 기준 없이 마치고 팔은 키보드로
+  if (!WIZ.on || CAL_STEPS[WIZ.step].type !== 'arm') return;
+  WIZ.data.arm = null; CALIB.arm = null; calFinish();
 }
 function renderWiz() {
-  const st = CAL_STEPS[Math.min(WIZ.step, CAL_STEPS.length - 1)], cnt = $('calCnt');
-  $('calStep').textContent = `손 보정 ${Math.min(WIZ.step + 1, 4)} / 4`; $('calIc').textContent = st.ic; $('calMsg').textContent = st.msg; $('calNote').textContent = WIZ.note;
+  const st = CAL_STEPS[Math.min(WIZ.step, CAL_N - 1)], cnt = $('calCnt'), choosing = WIZ.phase === 'choose';
+  $('calStep').textContent = `보정 ${Math.min(WIZ.step + 1, CAL_N)} / ${CAL_N}`; $('calIc').textContent = st.ic; $('calMsg').textContent = st.msg();
+  $('calNote').textContent = choosing ? '오른손이 기본입니다' : WIZ.note;
+  $('calChoice').classList.toggle('hidden', !choosing); cnt.classList.toggle('hidden', choosing);
+  document.querySelectorAll('#calChoice button').forEach(b => b.classList.toggle('primary', b.dataset.hand === (CALIB.hand || 'right')));
+  $('calSkip').classList.toggle('hidden', !(st.type === 'arm' && WIZ.lost > 3));
   cnt.classList.toggle('cap', WIZ.phase !== 'count');
   cnt.textContent = WIZ.phase === 'count' ? Math.max(1, Math.ceil((CAL_COUNT - WIZ.t) / (CAL_COUNT / 3))) : WIZ.phase === 'capture' ? '측정 중' : '✓ 완료';
-  const frac = WIZ.phase === 'count' ? 0.6 * WIZ.t / CAL_COUNT : WIZ.phase === 'capture' ? 0.6 + 0.4 * WIZ.t / CAL_HOLD : 1;
-  $('calProg').style.width = (100 * (WIZ.step + frac) / 4) + '%';
+  const frac = choosing ? 0 : WIZ.phase === 'count' ? 0.6 * WIZ.t / CAL_COUNT : WIZ.phase === 'capture' ? 0.6 + 0.4 * WIZ.t / CAL_HOLD : 1;
+  $('calProg').style.width = (100 * (WIZ.step + frac) / CAL_N) + '%';
 }
 function trackStep() {
   const now = performance.now();
-  if (video.readyState < 2 || video.currentTime === TRK.lastVT) { if (S.cam.valid && now - S.cam.lastSeen > 500) setCamValid(false); return; }
+  if (video.readyState < 2 || video.currentTime === TRK.lastVT) {
+    if (S.cam.valid && now - S.cam.lastSeen > 500) setCamValid(false);
+    if (S.cam.arm && now - TRK.armSeen > 500) S.cam.arm = false;
+    return;
+  }
   TRK.lastVT = video.currentTime;
-  let hr; try { hr = TRK.hand.detectForVideo(video, now); } catch (e) { return; }
+  let hr, pr = null; try { hr = TRK.hand.detectForVideo(video, now); if (TRK.pose) pr = TRK.pose.detectForVideo(video, now); } catch (e) { return; }
   const fdt = clamp((now - TRK.lastTs) / 1000, 1 / 120, 0.2); TRK.lastTs = now;
-  drawOverlay(hr);
-  const hand = hr.worldLandmarks?.[0], sample = hand ? { ...rawCurls(hand), dir: pointing(hand) } : null;
-  if (WIZ.on) { calFeed(sample, fdt); $('trkMode').textContent = '손 보정 중'; return; }
-  if (!sample) { if (S.cam.valid && now - S.cam.lastSeen > 400) setCamValid(false); $('trkMode').textContent = '손을 찾는 중…'; return; }
+  camFrame(hr, pr, fdt, now);
+}
+// 한 프레임의 인식 결과(손 hr, 포즈 pr)를 로봇 명령으로 바꾼다
+function camFrame(hr, pr, fdt, now = performance.now()) {
+  const P = readPose(pr), hi = pickHand(hr, P);
+  drawOverlay(hr, hi, pr, P);
+  const hand = hi >= 0 ? hr.worldLandmarks[hi] : null, sample = hand ? { ...rawCurls(hand), dir: pointing(hand) } : null;
+  if (WIZ.on) { calFeed(sample, P, fdt); $('trkMode').textContent = '보정 중'; return; }
+  // 팔: 기준 자세가 있고 팔이 보이면 로봇팔 회전·접힘을 카메라가 맡는다(안 보이면 키보드)
+  if (P && CALIB.arm && S.settings.armCam && !AUTO.running) { TRK.armSeen = now; S.cam.arm = true; armControl(P, fdt); }
+  else if (now - TRK.armSeen > 500) S.cam.arm = false;
+  const armTxt = S.cam.arm ? `${armName()}` : '';
+  if (!sample) {
+    if (S.cam.valid && now - S.cam.lastSeen > 400) setCamValid(false);
+    $('trkMode').textContent = S.cam.arm ? `${armTxt} 추적 중 · ${handName()}을 찾는 중…` : `${handName()}을 찾는 중…`; return;
+  }
   S.cam.lastSeen = now;
   // 지금 손이 두 보정 자세 중 어느 쪽에 가까운지(w)에 따라 편 손·주먹 기준값을 섞어 쓴다
   const A = CALIB.A, B = CALIB.B, span = B.dir - A.dir, w = Math.abs(span) > 0.12 ? clamp((sample.dir - A.dir) / span, 0, 1) : 0.5;
@@ -1109,18 +1209,26 @@ function trackStep() {
     const o = lerp(A.open[k], B.open[k], TRK.w), f = lerp(A.fist[k], B.fist[k], TRK.w);
     S.cam.curls[k] = TRK.f[k].f(clamp((sample[k] - o) / Math.max(0.2, f - o), 0, 1), fdt);
   }
-  $('trkMode').textContent = `손 추적 중 · ${TRK.w < 0.5 ? '손바닥 자세' : '정면 자세'}`;
+  $('trkMode').textContent = `${handName()}${S.cam.arm ? ' + ' + armTxt : ''} 추적 중`;
   if (!AUTO.running) setCamValid(true);
 }
-function drawOverlay(hr) {
-  const W = video.videoWidth, H = video.videoHeight; if (!W) return;
+function drawOverlay(hr, hi, pr, P) {
+  const W = video.videoWidth || 640, H = video.videoHeight || 480;
   if (overlay.width !== W) { overlay.width = W; overlay.height = H; }
   const c = overlay.getContext('2d'); c.clearRect(0, 0, W, H); c.lineCap = 'round';
-  for (const l of hr.landmarks || []) {
-    c.strokeStyle = '#ff7a2f'; c.lineWidth = 3;
-    for (const [a, b] of HAND_CONN) { c.beginPath(); c.moveTo(l[a].x * W, l[a].y * H); c.lineTo(l[b].x * W, l[b].y * H); c.stroke(); }
-    l.forEach((p, k) => { const tip = k % 4 === 0 && k > 0; c.fillStyle = tip ? '#3ddc97' : '#fff'; c.beginPath(); c.arc(p.x * W, p.y * H, tip ? 6 : 3, 0, 7); c.fill(); });
+  const pt = p => [p.x * W, p.y * H], line = (a, b, col, w) => { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); c.moveTo(...pt(a)); c.lineTo(...pt(b)); c.stroke(); };
+  const il = pr?.landmarks?.[0];
+  if (il) {
+    const L = il[11], R = il[12], mx = (L.x + R.x) / 2;
+    c.setLineDash([8, 8]); c.strokeStyle = 'rgba(76,195,255,.55)'; c.lineWidth = 2; c.beginPath(); c.moveTo(mx * W, 0); c.lineTo(mx * W, H); c.stroke(); c.setLineDash([]);   // 몸 중심선
+    line(L, R, 'rgba(255,255,255,.45)', 3);
+    if (P) { const { s, e, w } = P.id; line(il[s], il[e], '#4cc3ff', 7); line(il[e], il[w], '#4cc3ff', 7); for (const k of [s, e, w]) { c.fillStyle = '#fff'; c.beginPath(); c.arc(...pt(il[k]), 6, 0, 7); c.fill(); } }
   }
+  (hr?.landmarks || []).forEach((l, k) => {
+    const mine = k === hi; c.strokeStyle = mine ? '#ff7a2f' : 'rgba(255,255,255,.22)'; c.lineWidth = mine ? 3 : 2;
+    for (const [a, b] of HAND_CONN) { c.beginPath(); c.moveTo(...pt(l[a])); c.lineTo(...pt(l[b])); c.stroke(); }
+    if (mine) l.forEach((p, j) => { const tip = j % 4 === 0 && j > 0; c.fillStyle = tip ? '#3ddc97' : '#fff'; c.beginPath(); c.arc(...pt(p), tip ? 6 : 3, 0, 7); c.fill(); });
+  });
 }
 
 /* ============================================================ 학습: 시연 → 초깃값, CEM → 최적값 */
@@ -1324,11 +1432,13 @@ function updateHUD() {
   $('gLegend').innerHTML = (st.hint ? '<i style="background:var(--info)"></i>최소<i style="background:var(--bad)"></i>파손' : '') + (pol && st.guide ? '<i style="background:var(--ok)"></i>학습 최적' : '');
   if (T) $('alignInfo').innerHTML = `${os.lifted ? '초록 받침까지' : '물체까지'} 회전 <b class="${onTgt ? 'good' : ''}">${Math.abs(dA * 180 / Math.PI).toFixed(1)}°</b> ${onTgt ? (os.lifted ? '· 손을 펴서 놓으세요' : '· 손을 쥐어 잡으세요') : arrow}`;
   const ci = $('chipInput'); ci.className = 'chip' + (AUTO.running ? ' auto' : S.cam.valid ? ' on' : '');
-  ci.textContent = '입력: ' + (AUTO.running ? '로봇 자동' : `${TILT.on ? '기울기' : '방향키'} + ${S.cam.valid ? '카메라 손' : '수동 그립'}`);
+  ci.textContent = '입력: ' + (AUTO.running ? '로봇 자동' : `${S.cam.arm ? '웹캠 팔' : TILT.on ? '기울기' : '방향키'} + ${S.cam.valid ? '웹캠 손가락' : '수동 그립'}`);
   const cu = S.cam.valid ? S.cam.curls : five(S.grip);
   for (const [k, i5] of FBARS) { const id = 'c' + i5; $(id).style.width = (cu[k] * 100) + '%'; $(id + 'v').textContent = Math.round(cu[k] * 100) + '%'; }
   $('roYaw').textContent = (Math.atan2(robot.tcp.x, robot.tcp.z) * 180 / Math.PI).toFixed(0) + '°';
-  $('roSh').textContent = (robot.lift * 180 / Math.PI).toFixed(0) + '°'; $('roEl').textContent = FK.filter(k => f[k] > 0.02).length + ' / 5';
+  $('roSh').textContent = (robot.lift * 180 / Math.PI).toFixed(0) + '°';
+  $('armInfo').innerHTML = !S.cam.on ? '팔 인식: 꺼짐' : !CALIB.arm ? '팔 인식: 기준 자세 없음 · 「팔 기준만 다시」로 잡으세요' : !S.settings.armCam ? '팔 인식: 사용 안 함(키보드로 조작)'
+    : S.cam.arm ? `팔 인식 ✓ · 좌우 <b>${(S.cam.lat >= 0 ? '오른쪽 ' : '왼쪽 ') + Math.abs(S.cam.lat * 100).toFixed(0)}</b> · 들기 <b>${(S.cam.up * 100).toFixed(0)}</b> · 당기기 <b>${(S.cam.back * 100).toFixed(0)}</b> <small>(어깨너비 %)</small>` : '팔 인식: 어깨·손목이 화면에 안 보임 → 키보드로 조작'; $('roEl').textContent = FK.filter(k => f[k] > 0.02).length + ' / 5';
 }
 
 /* ---------- 이벤트 연결 */
@@ -1365,7 +1475,12 @@ document.querySelectorAll('#touchPad button').forEach(b => {
   b.onpointerdown = e => { e.preventDefault(); KEYS.add(k); b.classList.add('down'); b.setPointerCapture?.(e.pointerId); };
   b.onpointerup = b.onpointercancel = b.onlostpointercapture = up; b.oncontextmenu = e => e.preventDefault();
 });
-$('btnCal').onclick = startCalWizard; $('btnCalCancel').onclick = () => stopCalWizard(true);
+$('btnCal').onclick = () => startCalWizard(0); $('btnCalArm').onclick = () => startCalWizard(CALIB.done ? CAL_ARM : 0); $('calSkip').onclick = skipArmStep;
+document.querySelectorAll('#calChoice button').forEach(b => b.onclick = () => chooseHand(b.dataset.hand));
+$('setHand').value = CALIB.hand || 'right';
+$('setHand').onchange = e => { chooseHand(e.target.value); if (S.cam.on) { toast(`${handName()}으로 바꿨습니다`, 'ok', `${armName()} 기준 자세를 다시 잡습니다`); startCalWizard(CAL_ARM); } };
+$('setArmCam').checked = S.settings.armCam; $('setArmCam').onchange = e => { S.settings.armCam = e.target.checked; saveSettings(); };
+for (const [id, k] of [['setCamYaw', 'camYaw'], ['setCamLift', 'camLift'], ['setCamDepth', 'camDepth']]) { const el = $(id); el.value = S.settings[k]; el.oninput = () => { S.settings[k] = +el.value; saveSettings(); }; } $('btnCalCancel').onclick = () => stopCalWizard(true);
 $('learnObj').innerHTML = OBJ_KEYS.map(k => `<option value="${k}">${OBJ[k].ic} ${OBJ[k].name}</option>`).join('');
 $('learnObj').onchange = () => { drawCurve(); drawForceWin(); renderPolicy(); };
 $('btnLearn').onclick = () => startLearn([$('learnObj').value]); $('btnLearnAll').onclick = () => startLearn(OBJ_KEYS);
@@ -1410,7 +1525,7 @@ function frame(now) {
 renderObjGrid(); renderLog(); renderDemos(); renderRobotList(); renderPolicy();
 newTask();
 requestAnimationFrame(frame);
-window.GRIPLAB = { S, robot, AUTO, LEARN, OBJ, get DEMOS() { return DEMOS; }, get POLICIES() { return POLICIES; }, newTask, startAuto, rollout, learnTick, camera, controls, handPenetration, WIZ, calFeed, startCalWizard, get CALIB() { return CALIB; },
+window.GRIPLAB = { S, robot, AUTO, LEARN, OBJ, get DEMOS() { return DEMOS; }, get POLICIES() { return POLICIES; }, newTask, startAuto, rollout, learnTick, camera, controls, handPenetration, camFrame, readPose, pickHand, TRK, WIZ, startCalWizard, chooseHand, get CALIB() { return CALIB; }, WIZ, calFeed, startCalWizard, get CALIB() { return CALIB; },
   // 화면 없이 시뮬레이션만 빠르게 돌리는 검증용 함수
   input(dt) { camera.updateMatrixWorld(); S.dirSign = screenSign(); manualInput(dt); followView(); return S.dirSign; },
   fast(sec, dt = 1 / 60) { for (let t = 0; t < sec; t += dt) { S.simT += dt; if (AUTO.running) autoStep(dt); else controlStep(dt); physicsStep(dt); } robot.update(); } };

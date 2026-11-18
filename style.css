@@ -105,6 +105,12 @@ main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 400px}
 #calBox .cnt{font-size:30px;font-weight:800;color:var(--accent);min-width:40px;text-align:center;font-variant-numeric:tabular-nums}
 #calBox .cnt.cap{font-size:13px;color:var(--ok)}
 #calBox .prog{grid-column:1/-1;margin:0}
+#calChoice{grid-column:1/-1;display:flex;gap:8px;pointer-events:auto}
+#calChoice button{flex:1;padding:8px 6px;font-size:13px;font-weight:700}
+#calBox .top > span{display:flex;gap:6px}
+#calSkip{pointer-events:auto;font-size:11px;padding:3px 8px;background:rgba(5,8,12,.8);border-color:var(--warn);color:var(--warn)}
+.armInfo{margin-top:6px;font-size:11px;color:var(--muted);background:#0f1520;border-radius:8px;padding:5px 8px;font-variant-numeric:tabular-nums}
+.armInfo b{color:var(--text)}
 .readouts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
 .ro{background:#0f1520;border-radius:8px;padding:4px 8px}
 .ro span{display:block;font-size:11px;color:var(--muted)}
